@@ -1,0 +1,16 @@
+**/node_modules
+**/dist
+**/.next
+**/.expo
+**/coverage
+**/.env
+**/.env.*
+!**/.env.example
+**/*.keystore
+**/service-account*.json
+**/google-services.json
+.git
+VideoOneSolutions
+apps/mobile
+workers/*/prisma
+infra/cloudflare/media-worker/.wrangler

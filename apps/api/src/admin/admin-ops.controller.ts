@@ -44,7 +44,7 @@ class ScheduleDto {
   @ApiPropertyOptional({ description: 'Omit to send as soon as the worker picks it up' }) @IsOptional() @IsDateString() scheduledAt?: string;
 }
 
-const REPORT_KINDS = ['plays', 'rewards', 'wallet', 'signups', 'revenue-direct', 'revenue-network'] as const;
+const REPORT_KINDS = ['plays', 'rewards', 'wallet', 'signups', 'events', 'revenue-direct', 'revenue-network'] as const;
 type ReportKind = (typeof REPORT_KINDS)[number];
 
 @Injectable()
@@ -60,7 +60,7 @@ export class OpsService {
     const dayAgo = new Date(now.getTime() - DAY);
     const weekAgo = new Date(now.getTime() - 7 * DAY);
     const p = this.prisma;
-    const [users, newToday, dau, wau, playsToday, unlocks, coinsIn, coinsSpent, rewardsToday, assets, openReports, topDramas, directToday, network7d] =
+    const [users, newToday, dau, wau, playsToday, unlocks, coinsIn, coinsSpent, rewardsToday, assets, openReports, topDramas, directToday, network7d, eventsToday] =
       await Promise.all([
         p.user.count({ where: { status: { not: 'DELETED' } } }),
         p.user.count({ where: { createdAt: { gte: today } } }),
@@ -76,6 +76,7 @@ export class OpsService {
         p.drama.findMany({ orderBy: { viewCount: 'desc' }, take: 10, select: { id: true, title: true, viewCount: true, favoriteCount: true, status: true } }),
         Promise.all([p.adImpression.count({ where: { occurredAt: { gte: today } } }), p.adClick.count({ where: { occurredAt: { gte: today } } })]),
         p.adNetworkDailyReport.aggregate({ where: { reportDate: { gte: new Date(today.getTime() - 7 * DAY) } }, _sum: { estimatedEarningsMicros: true, impressions: true } }),
+        p.analyticsEvent.groupBy({ by: ['name'], where: { occurredAt: { gte: today } }, _count: true }),
       ]);
     return plain({
       generatedAt: now,
@@ -89,6 +90,7 @@ export class OpsService {
         direct: { impressionsToday: directToday[0], clicksToday: directToday[1] },
         network: { last7DaysImpressions: network7d._sum.impressions ?? 0, last7DaysEarningsMicros: network7d._sum.estimatedEarningsMicros ?? 0 },
       },
+      eventsToday: Object.fromEntries(eventsToday.map((e) => [e.name, e._count])),
       topDramas,
     });
   }
@@ -206,6 +208,15 @@ export class OpsService {
           rows: await this.prisma.$queryRaw`
             SELECT date_trunc('day', created_at)::date AS day, COUNT(*)::int AS signups
             FROM users WHERE created_at >= ${from} AND created_at < ${end} GROUP BY 1 ORDER BY 1`,
+        };
+      case 'events':
+        return {
+          columns: ['day', 'event', 'platform', 'count', 'users'],
+          rows: await this.prisma.$queryRaw`
+            SELECT date_trunc('day', occurred_at)::date AS day, name AS event, platform::text AS platform,
+                   COUNT(*)::int AS count, COUNT(DISTINCT user_id)::int AS users
+            FROM analytics_events WHERE occurred_at >= ${from} AND occurred_at < ${end}
+            GROUP BY 1, 2, 3 ORDER BY 1, 2, 3`,
         };
       case 'revenue-direct':
         return {

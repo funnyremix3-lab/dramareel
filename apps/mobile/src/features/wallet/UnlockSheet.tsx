@@ -1,9 +1,10 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
+import { track } from '@/lib/analytics';
 import { ApiError } from '@/lib/api/client';
 import { Api } from '@/lib/api/endpoints';
 import type { Episode } from '@/lib/api/types';
@@ -39,7 +40,12 @@ export function UnlockSheet({
   const price = episode.unlockCoins ?? 0;
   const balance = wallet.data?.balance ?? 0;
 
-  const done = async () => {
+  useEffect(() => {
+    if (visible) track('paywall_view', { episode_id: episode.id });
+  }, [visible, episode.id]);
+
+  const done = async (method: string) => {
+    track('unlock_success', { episode_id: episode.id, method });
     await invalidateEntitlements();
     setMessage(null);
     onUnlocked();
@@ -47,7 +53,7 @@ export function UnlockSheet({
 
   const coins = useMutation({
     mutationFn: () => Api.unlockWithCoins(episode.id),
-    onSuccess: done,
+    onSuccess: () => done('coins'),
     onError: (err) => setMessage(errorMessage(err)),
   });
 
@@ -55,7 +61,8 @@ export function UnlockSheet({
     mutationFn: () => runRewardedFlow({ placementKey: 'episode_unlock_rewarded', purpose: 'EPISODE_UNLOCK', episodeId: episode.id }),
     onMutate: () => setMessage(null),
     onSuccess: async (outcome) => {
-      if (outcome.status === 'granted') return done();
+      if (outcome.status !== 'unavailable') track('rewarded_ad_shown', { placement: 'episode_unlock_rewarded' });
+      if (outcome.status === 'granted') return done('ad');
       if (outcome.status === 'unavailable') setMessage(t('unlock.adUnavailable'));
       if (outcome.status === 'failed') setMessage(t('unlock.rewardFailed'));
     },

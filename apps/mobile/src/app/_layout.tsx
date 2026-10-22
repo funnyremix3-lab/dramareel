@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { initAds } from '@/features/ads/ads';
 import { useAuth } from '@/features/auth/auth-store';
 import { registerForPush } from '@/features/notifications/push';
+import { initAnalytics } from '@/lib/analytics';
 import { configureApiClient } from '@/lib/api/client';
 import { config } from '@/lib/config';
 import { currentLanguage, restoreLanguage } from '@/lib/i18n';
@@ -33,6 +34,7 @@ function RootLayout() {
       setReady(true);
       await SplashScreen.hideAsync();
       void initAds();
+      void initAnalytics();
     })();
   }, []);
 

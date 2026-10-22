@@ -5,6 +5,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
 import { AdminModule } from './admin/admin.module';
 import { AdsModule } from './ads/ads.module';
+import { AnalyticsModule } from './analytics/analytics.controller';
 import { AuthGuard } from './auth/auth.guard';
 import { AuthModule } from './auth/auth.module';
 import { CatalogModule } from './catalog/catalog.module';
@@ -61,6 +62,7 @@ const env = loadEnv();
     AdsModule,
     PaymentsModule,
     AdminModule,
+    AnalyticsModule,
     DevModule.register(),
     HealthModule,
   ],

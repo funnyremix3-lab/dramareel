@@ -1,9 +1,11 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Linking, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useAuth } from '@/features/auth/auth-store';
+import { guestAnalyticsConsent, setGuestAnalyticsConsent } from '@/lib/analytics';
 import { Api } from '@/lib/api/endpoints';
 import type { Me } from '@/lib/api/types';
 import { config } from '@/lib/config';
@@ -17,6 +19,7 @@ export default function SettingsScreen() {
   const { status, signOut } = useAuth();
   const signedIn = status === 'signedIn';
   const me = useQuery({ queryKey: qk.me, queryFn: Api.me, enabled: signedIn });
+  const [guestAnalytics, setGuestAnalytics] = useState(guestAnalyticsConsent());
 
   const consents = useMutation({
     mutationFn: (next: Me['consents']) => Api.updateConsents(next),
@@ -63,7 +66,19 @@ export default function SettingsScreen() {
           <Row label={t('settings.marketing')} value={c.marketing} onChange={toggle('marketing')} />
           <Row label={t('settings.push')} value={c.push} onChange={toggle('push')} />
         </View>
-      ) : null}
+      ) : (
+        <View style={styles.card}>
+          <Text style={type.heading}>{t('settings.privacy')}</Text>
+          <Row
+            label={t('settings.analytics')}
+            value={guestAnalytics}
+            onChange={(v) => {
+              setGuestAnalytics(v);
+              void setGuestAnalyticsConsent(v);
+            }}
+          />
+        </View>
+      )}
 
       <Button label={t('settings.privacyPolicy')} variant="ghost" onPress={() => Linking.openURL(config.privacyPolicyUrl)} />
       <Button label={t('settings.terms')} variant="ghost" onPress={() => Linking.openURL(config.termsUrl)} />

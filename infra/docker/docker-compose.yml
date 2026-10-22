@@ -31,6 +31,39 @@ services:
     ports: ["9000:8333"]
     volumes: [s3data:/data, ./s3.json:/etc/seaweedfs/s3.json:ro]
 
+  # ── Application services (opt-in): docker compose --profile app up -d --build ──
+  # Each reads its own env file; copy the .env.example files first. Not a production setup.
+  api:
+    profiles: [app]
+    build: { context: ../.., dockerfile: apps/api/Dockerfile }
+    env_file: ../../apps/api/.env.docker
+    ports: ["3000:3000"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  transcoder:
+    profiles: [app]
+    build: { context: ../.., dockerfile: workers/video-transcoder/Dockerfile }
+    env_file: ../../workers/video-transcoder/.env.docker
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  notifications:
+    profiles: [app]
+    build: { context: ../.., dockerfile: workers/notifications/Dockerfile }
+    env_file: ../../workers/notifications/.env.docker
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  admin:
+    profiles: [app]
+    build: { context: ../.., dockerfile: apps/admin/Dockerfile }
+    env_file: ../../apps/admin/.env.docker
+    ports: ["3001:3001"]
+    depends_on: [api]
+
 volumes:
   pgdata:
   s3data:

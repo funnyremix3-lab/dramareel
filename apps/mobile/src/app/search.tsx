@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, TextInput, View } from 'react-native';
 import { DramaGrid } from '@/features/dramas/components';
+import { track } from '@/lib/analytics';
 import { Api } from '@/lib/api/endpoints';
 import { errorMessage } from '@/lib/i18n';
 import { qk } from '@/lib/query';
@@ -16,7 +17,11 @@ export default function SearchScreen() {
 
   // Debounce typing so we search once the user pauses.
   useEffect(() => {
-    const timer = setTimeout(() => setQ(text.trim()), 350);
+    const timer = setTimeout(() => {
+      const next = text.trim();
+      setQ(next);
+      if (next.length >= 2) track('search', { length: next.length });
+    }, 350);
     return () => clearTimeout(timer);
   }, [text]);
 

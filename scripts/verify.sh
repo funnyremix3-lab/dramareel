@@ -5,7 +5,7 @@
 # Integration tests need: docker compose -f infra/docker/docker-compose.yml up -d
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-TARGETS="${*:-api transcoder media-worker mobile admin}"
+TARGETS="${*:-api transcoder notifications media-worker mobile admin}"
 FAILED=()
 
 run() { # name, dir, command...
@@ -34,6 +34,9 @@ for t in $TARGETS; do
     transcoder)
       run transcoder-typecheck workers/video-transcoder "npx tsc --noEmit -p tsconfig.json"
       run transcoder-unit workers/video-transcoder "npx jest" ;;
+    notifications)
+      run notifications-typecheck workers/notifications "npx tsc --noEmit -p tsconfig.json"
+      run notifications-unit workers/notifications "npx jest" ;;
     media-worker)
       run media-worker-typecheck infra/cloudflare/media-worker "npx tsc --noEmit"
       run media-worker-test infra/cloudflare/media-worker "npm test --silent" ;;

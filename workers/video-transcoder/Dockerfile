@@ -1,6 +1,6 @@
 # Build from the repository root:
 #   docker build -f workers/video-transcoder/Dockerfile -t reel-drama-transcoder .
-FROM node:22-bookworm-slim AS build
+FROM node:24-bookworm-slim AS build
 WORKDIR /app
 COPY apps/api/prisma/schema.prisma apps/api/prisma/schema.prisma
 COPY workers/video-transcoder/package.json workers/video-transcoder/package-lock.json workers/video-transcoder/
@@ -11,7 +11,7 @@ COPY workers/video-transcoder/tsconfig.json workers/video-transcoder/tsconfig.bu
 COPY workers/video-transcoder/src ./src
 RUN npm run build && npm prune --omit=dev
 
-FROM node:22-bookworm-slim
+FROM node:24-bookworm-slim
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ffmpeg ca-certificates openssl \
   && rm -rf /var/lib/apt/lists/*

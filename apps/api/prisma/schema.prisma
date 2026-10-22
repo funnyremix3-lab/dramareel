@@ -966,3 +966,20 @@ model AuditLog {
   @@index([createdAt(sort: Desc)])
   @@map("audit_logs")
 }
+
+/// Consent-gated product analytics. Only allow-listed event names and primitive properties;
+/// user_id is stored only for signed-in users who consented. No foreign key so purges are cheap.
+model AnalyticsEvent {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String?   @map("user_id") @db.Uuid
+  name       String    @db.VarChar(60)
+  properties Json      @default("{}")
+  platform   Platform?
+  appVersion String?   @map("app_version") @db.VarChar(20)
+  occurredAt DateTime  @map("occurred_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@index([name, occurredAt])
+  @@index([occurredAt])
+  @@map("analytics_events")
+}

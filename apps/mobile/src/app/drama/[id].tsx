@@ -2,12 +2,13 @@ import { useMutation } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useRequireAuth } from '@/features/auth/use-require-auth';
 import { useAllEpisodes, useDrama } from '@/features/dramas/queries';
 import { EpisodeGrid } from '@/features/player/EpisodesSheet';
+import { track } from '@/lib/analytics';
 import { Api } from '@/lib/api/endpoints';
 import { errorMessage } from '@/lib/i18n';
 import { qk, queryClient } from '@/lib/query';
@@ -23,10 +24,12 @@ export default function DramaDetailScreen() {
   const drama = useDrama(id);
   const episodes = useAllEpisodes(id);
   const [expanded, setExpanded] = useState(false);
+  useEffect(() => track('drama_view', { drama_id: id }), [id]);
 
   const favorite = useMutation({
     mutationFn: (next: boolean) => Api.favorite(id, next),
-    onSuccess: () => {
+    onSuccess: (r) => {
+      if (r.favorite) track('favorite_add', { drama_id: id });
       void queryClient.invalidateQueries({ queryKey: qk.drama(id) });
       void queryClient.invalidateQueries({ queryKey: qk.favorites });
     },

@@ -4,6 +4,7 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, GestureResponderEvent, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { track } from '@/lib/analytics';
 import { ApiError } from '@/lib/api/client';
 import { Api } from '@/lib/api/endpoints';
 import type { Episode } from '@/lib/api/types';
@@ -60,6 +61,7 @@ export const EpisodeSlide = memo(function EpisodeSlide(props: EpisodeSlideProps)
   const [attempt, setAttempt] = useState(0);
   const [like, setLike] = useState({ liked: episode.liked, count: episode.likeCount });
   const progress = useProgressReporter(episode.id);
+  const started = useRef(false);
 
   // Adopt fresh server like state when the episode data changes (derived during render).
   const [likeSource, setLikeSource] = useState({ liked: episode.liked, count: episode.likeCount });
@@ -138,11 +140,16 @@ export const EpisodeSlide = memo(function EpisodeSlide(props: EpisodeSlideProps)
           }}
           onBuffering={setBuffering}
           onProgress={(pos) => {
+            if (!started.current && pos > 0) {
+              started.current = true;
+              track('episode_start', { episode_id: episode.id, number: episode.number });
+            }
             setPosition(pos);
             progress.onProgress(pos);
           }}
           onEnd={() => {
             progress.onEnd();
+            track('episode_complete', { episode_id: episode.id, number: episode.number });
             if (isActive) props.onEnded();
           }}
           onError={onPlayerError}
