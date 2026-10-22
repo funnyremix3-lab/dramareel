@@ -1,0 +1,968 @@
+// Reel Drama — PostgreSQL schema
+//
+// Conventions
+// - UUID v4 primary keys (gen_random_uuid()), snake_case tables/columns via @@map/@map.
+// - created_at / updated_at on mutable rows; append-only ledgers have created_at only.
+// - Money is stored as integer minor units (micros or paise) — never floats.
+// - Coins are integers. user_wallets.balance is a cache of SUM(wallet_transactions.amount),
+//   updated in the same DB transaction as the ledger insert.
+// - wallet_transactions and audit_logs are made immutable by triggers in the initial
+//   migration (see docs/database.md); Prisma cannot express triggers.
+// - Video binaries never live here — only object-storage keys and metadata.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
+}
+
+// ───────────────────────────── Identity ─────────────────────────────
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+model User {
+  id                  String     @id @default(uuid()) @db.Uuid
+  /// Subject (`sub`) of the identity provider's JWT (Supabase Auth user id).
+  authProviderId      String     @unique @map("auth_provider_id")
+  email               String?    @unique
+  phone               String?    @unique
+  status              UserStatus @default(ACTIVE)
+  locale              String     @default("en") @db.VarChar(8)
+  lastSeenAt          DateTime?  @map("last_seen_at")
+  /// Set when the user requests account deletion; PII is purged by a retention job.
+  deletionRequestedAt DateTime?  @map("deletion_requested_at")
+  deletedAt           DateTime?  @map("deleted_at")
+  createdAt           DateTime   @default(now()) @map("created_at")
+  updatedAt           DateTime   @updatedAt @map("updated_at")
+
+  profile        UserProfile?
+  roles          UserRole[]
+  wallet         UserWallet?
+  watchHistory   WatchHistory[]
+  favorites      Favorite[]
+  likes          Like[]
+  comments       Comment[]
+  commentReports CommentReport[]
+  blocksMade     UserBlock[]          @relation("blocker")
+  blocksReceived UserBlock[]          @relation("blocked")
+  rewardClaims   RewardClaim[]
+  episodeUnlocks EpisodeUnlock[]
+  subscriptions  Subscription[]
+  payments       PaymentTransaction[]
+  deviceTokens   DeviceToken[]
+  auditLogs      AuditLog[]
+
+  @@map("users")
+}
+
+model UserProfile {
+  userId                    String    @id @map("user_id") @db.Uuid
+  displayName               String?   @map("display_name") @db.VarChar(60)
+  avatarKey                 String?   @map("avatar_key")
+  bio                       String?   @db.VarChar(280)
+  analyticsConsent          Boolean   @default(false) @map("analytics_consent")
+  adsPersonalizationConsent Boolean   @default(false) @map("ads_personalization_consent")
+  marketingConsent          Boolean   @default(false) @map("marketing_consent")
+  pushEnabled               Boolean   @default(true) @map("push_enabled")
+  consentUpdatedAt          DateTime? @map("consent_updated_at")
+  createdAt                 DateTime  @default(now()) @map("created_at")
+  updatedAt                 DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
+}
+
+model Role {
+  id          String   @id @default(uuid()) @db.Uuid
+  /// OWNER | CONTENT_MANAGER | ADS_MANAGER | SUPPORT_AGENT (plus custom roles)
+  key         String   @unique @db.VarChar(40)
+  name        String   @db.VarChar(80)
+  /// Permission strings, e.g. "dramas:write", "ads:campaigns:write", "users:read".
+  permissions String[]
+  isSystem    Boolean  @default(false) @map("is_system")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  users UserRole[]
+
+  @@map("roles")
+}
+
+model UserRole {
+  userId    String   @map("user_id") @db.Uuid
+  roleId    String   @map("role_id") @db.Uuid
+  grantedBy String?  @map("granted_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@index([roleId])
+  @@map("user_roles")
+}
+
+model DeviceToken {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  token      String   @unique
+  platform   Platform
+  lastUsedAt DateTime @default(now()) @map("last_used_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("device_tokens")
+}
+
+enum Platform {
+  ANDROID
+  IOS
+  WEB
+}
+
+// ───────────────────────────── Catalog ─────────────────────────────
+
+model Language {
+  /// BCP-47 code, e.g. "en", "hi".
+  code       String  @id @db.VarChar(8)
+  name       String  @db.VarChar(40)
+  nativeName String  @map("native_name") @db.VarChar(40)
+  enabled    Boolean @default(true)
+
+  dramas       Drama[]
+  translations DramaTranslation[]
+  subtitles    Subtitle[]
+
+  @@map("languages")
+}
+
+model Category {
+  id        String   @id @default(uuid()) @db.Uuid
+  slug      String   @unique @db.VarChar(60)
+  /// Localised names: { "en": "Romance", "hi": "रोमांस" }
+  names     Json
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  dramas DramaCategory[]
+
+  @@index([isActive, sortOrder])
+  @@map("categories")
+}
+
+enum PublishStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  ARCHIVED
+}
+
+enum VideoOrientation {
+  PORTRAIT
+  LANDSCAPE
+}
+
+model Drama {
+  id                  String           @id @default(uuid()) @db.Uuid
+  slug                String           @unique @db.VarChar(120)
+  /// Title/synopsis in the primary language; other languages in drama_translations.
+  title               String           @db.VarChar(160)
+  synopsis            String?
+  primaryLanguageCode String           @map("primary_language_code") @db.VarChar(8)
+  posterKey           String?          @map("poster_key")
+  coverKey            String?          @map("cover_key")
+  /// [{ "name": "…", "role": "…" }]
+  cast                Json             @default("[]")
+  tags                String[]
+  orientation         VideoOrientation @default(PORTRAIT)
+  maturityRating      String?          @map("maturity_rating") @db.VarChar(10)
+  status              PublishStatus    @default(DRAFT)
+  /// Episodes with number <= this are free regardless of per-episode access type.
+  freeEpisodeCount    Int              @default(5) @map("free_episode_count")
+  defaultUnlockCoins  Int              @default(30) @map("default_unlock_coins")
+  isFeatured          Boolean          @default(false) @map("is_featured")
+  trendingScore       Float            @default(0) @map("trending_score")
+  viewCount           BigInt           @default(0) @map("view_count")
+  favoriteCount       Int              @default(0) @map("favorite_count")
+  episodeCount        Int              @default(0) @map("episode_count")
+  publishedAt         DateTime?        @map("published_at")
+  createdAt           DateTime         @default(now()) @map("created_at")
+  updatedAt           DateTime         @updatedAt @map("updated_at")
+
+  primaryLanguage Language           @relation(fields: [primaryLanguageCode], references: [code])
+  translations    DramaTranslation[]
+  categories      DramaCategory[]
+  seasons         Season[]
+  episodes        Episode[]
+  favorites       Favorite[]
+
+  @@index([status, publishedAt(sort: Desc)])
+  @@index([status, trendingScore(sort: Desc)])
+  @@index([status, isFeatured])
+  @@map("dramas")
+}
+
+model DramaTranslation {
+  dramaId      String  @map("drama_id") @db.Uuid
+  languageCode String  @map("language_code") @db.VarChar(8)
+  title        String  @db.VarChar(160)
+  synopsis     String?
+
+  drama    Drama    @relation(fields: [dramaId], references: [id], onDelete: Cascade)
+  language Language @relation(fields: [languageCode], references: [code])
+
+  @@id([dramaId, languageCode])
+  @@map("drama_translations")
+}
+
+model DramaCategory {
+  dramaId    String @map("drama_id") @db.Uuid
+  categoryId String @map("category_id") @db.Uuid
+
+  drama    Drama    @relation(fields: [dramaId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([dramaId, categoryId])
+  @@index([categoryId])
+  @@map("drama_categories")
+}
+
+model Season {
+  id        String   @id @default(uuid()) @db.Uuid
+  dramaId   String   @map("drama_id") @db.Uuid
+  number    Int
+  title     String?  @db.VarChar(160)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  drama    Drama     @relation(fields: [dramaId], references: [id], onDelete: Cascade)
+  episodes Episode[]
+
+  @@unique([dramaId, number])
+  @@map("seasons")
+}
+
+enum EpisodeAccess {
+  FREE
+  PREMIUM
+}
+
+model Episode {
+  id                  String        @id @default(uuid()) @db.Uuid
+  dramaId             String        @map("drama_id") @db.Uuid
+  seasonId            String        @map("season_id") @db.Uuid
+  /// 1-based order within the drama (continuous across seasons) — drives the swipe feed.
+  number              Int
+  title               String?       @db.VarChar(160)
+  synopsis            String?
+  durationSeconds     Int           @default(0) @map("duration_seconds")
+  access              EpisodeAccess @default(PREMIUM)
+  /// Overrides drama.default_unlock_coins when set.
+  unlockCoins         Int?          @map("unlock_coins")
+  status              PublishStatus @default(DRAFT)
+  currentVideoAssetId String?       @unique @map("current_video_asset_id") @db.Uuid
+  thumbnailKey        String?       @map("thumbnail_key")
+  likeCount           Int           @default(0) @map("like_count")
+  commentCount        Int           @default(0) @map("comment_count")
+  viewCount           BigInt        @default(0) @map("view_count")
+  publishedAt         DateTime?     @map("published_at")
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
+
+  drama        Drama           @relation(fields: [dramaId], references: [id], onDelete: Cascade)
+  season       Season          @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  currentAsset VideoAsset?     @relation("CurrentAsset", fields: [currentVideoAssetId], references: [id], onDelete: SetNull)
+  videoAssets  VideoAsset[]    @relation("EpisodeAssets")
+  subtitles    Subtitle[]
+  watchHistory WatchHistory[]
+  likes        Like[]
+  comments     Comment[]
+  unlocks      EpisodeUnlock[]
+  rewardClaims RewardClaim[]
+
+  @@unique([dramaId, number])
+  @@index([dramaId, status, number])
+  @@index([status, publishedAt(sort: Desc)])
+  @@map("episodes")
+}
+
+// ───────────────────────────── Media ─────────────────────────────
+
+enum VideoAssetStatus {
+  AWAITING_UPLOAD
+  UPLOADED
+  PROCESSING
+  READY
+  FAILED
+}
+
+model VideoAsset {
+  id                  String           @id @default(uuid()) @db.Uuid
+  episodeId           String?          @map("episode_id") @db.Uuid
+  status              VideoAssetStatus @default(AWAITING_UPLOAD)
+  /// originals/{assetId}/source.{ext} — private, never served to clients.
+  originalKey         String           @unique @map("original_key")
+  /// processed/{assetId}/master.m3u8
+  hlsMasterKey        String?          @map("hls_master_key")
+  /// [{ "name": "720p", "width": 720, "height": 1280, "bandwidth": 2400000, "playlistKey": "…" }]
+  renditions          Json             @default("[]")
+  thumbnailKey        String?          @map("thumbnail_key")
+  previewKey          String?          @map("preview_key")
+  mimeType            String?          @map("mime_type") @db.VarChar(80)
+  sizeBytes           BigInt?          @map("size_bytes")
+  durationMs          Int?             @map("duration_ms")
+  width               Int?
+  height              Int?
+  checksumSha256      String?          @map("checksum_sha256") @db.VarChar(64)
+  attempts            Int              @default(0)
+  lastError           String?          @map("last_error")
+  uploadedBy          String?          @map("uploaded_by") @db.Uuid
+  processingStartedAt DateTime?        @map("processing_started_at")
+  readyAt             DateTime?        @map("ready_at")
+  createdAt           DateTime         @default(now()) @map("created_at")
+  updatedAt           DateTime         @updatedAt @map("updated_at")
+
+  episode    Episode? @relation("EpisodeAssets", fields: [episodeId], references: [id], onDelete: SetNull)
+  currentFor Episode? @relation("CurrentAsset")
+
+  @@index([episodeId])
+  @@index([status, updatedAt])
+  @@map("video_assets")
+}
+
+model Subtitle {
+  id           String   @id @default(uuid()) @db.Uuid
+  episodeId    String   @map("episode_id") @db.Uuid
+  languageCode String   @map("language_code") @db.VarChar(8)
+  /// processed/{assetId}/subs/{lang}.vtt
+  storageKey   String   @map("storage_key")
+  label        String   @db.VarChar(40)
+  isDefault    Boolean  @default(false) @map("is_default")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  episode  Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  language Language @relation(fields: [languageCode], references: [code])
+
+  @@unique([episodeId, languageCode])
+  @@map("subtitles")
+}
+
+// ───────────────────────────── Engagement ─────────────────────────────
+
+model WatchHistory {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  episodeId       String   @map("episode_id") @db.Uuid
+  dramaId         String   @map("drama_id") @db.Uuid
+  positionSeconds Int      @default(0) @map("position_seconds")
+  completed       Boolean  @default(false)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  episode Episode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, episodeId])
+  @@index([userId, updatedAt(sort: Desc)])
+  @@index([userId, dramaId])
+  @@map("watch_history")
+}
+
+model Favorite {
+  userId    String   @map("user_id") @db.Uuid
+  dramaId   String   @map("drama_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  drama Drama @relation(fields: [dramaId], references: [id], onDelete: Cascade)
+
+  @@id([userId, dramaId])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("favorites")
+}
+
+model Like {
+  userId    String   @map("user_id") @db.Uuid
+  episodeId String   @map("episode_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  episode Episode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@id([userId, episodeId])
+  @@index([episodeId])
+  @@map("likes")
+}
+
+enum CommentStatus {
+  VISIBLE
+  HIDDEN
+  DELETED
+}
+
+model Comment {
+  id          String        @id @default(uuid()) @db.Uuid
+  episodeId   String        @map("episode_id") @db.Uuid
+  userId      String        @map("user_id") @db.Uuid
+  parentId    String?       @map("parent_id") @db.Uuid
+  body        String        @db.VarChar(500)
+  status      CommentStatus @default(VISIBLE)
+  reportCount Int           @default(0) @map("report_count")
+  moderatedBy String?       @map("moderated_by") @db.Uuid
+  moderatedAt DateTime?     @map("moderated_at")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  episode Episode         @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent  Comment?        @relation("Replies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies Comment[]       @relation("Replies")
+  reports CommentReport[]
+
+  @@index([episodeId, status, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([status, reportCount(sort: Desc)])
+  @@map("comments")
+}
+
+enum ReportStatus {
+  OPEN
+  ACTIONED
+  DISMISSED
+}
+
+model CommentReport {
+  id         String       @id @default(uuid()) @db.Uuid
+  commentId  String       @map("comment_id") @db.Uuid
+  reporterId String       @map("reporter_id") @db.Uuid
+  reason     String       @db.VarChar(40)
+  details    String?      @db.VarChar(500)
+  status     ReportStatus @default(OPEN)
+  resolvedBy String?      @map("resolved_by") @db.Uuid
+  resolvedAt DateTime?    @map("resolved_at")
+  createdAt  DateTime     @default(now()) @map("created_at")
+
+  comment  Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  reporter User    @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, reporterId])
+  @@index([status, createdAt])
+  @@map("comment_reports")
+}
+
+/// A user hiding another user's comments ("block abusive commenter").
+model UserBlock {
+  blockerId String   @map("blocker_id") @db.Uuid
+  blockedId String   @map("blocked_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  blocker User @relation("blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked User @relation("blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@id([blockerId, blockedId])
+  @@map("user_blocks")
+}
+
+// ───────────────────────────── Wallet & entitlements ─────────────────────────────
+
+model UserWallet {
+  userId    String   @id @map("user_id") @db.Uuid
+  /// Cached sum of the ledger. CHECK (balance >= 0) is added in the migration.
+  balance   Int      @default(0)
+  /// Optimistic-lock counter, incremented on every ledger write.
+  version   Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user         User                @relation(fields: [userId], references: [id], onDelete: Restrict)
+  transactions WalletTransaction[]
+
+  @@map("user_wallets")
+}
+
+enum WalletTxnType {
+  AD_REWARD
+  PURCHASE
+  EPISODE_UNLOCK
+  REFUND
+  REVERSAL
+  BONUS
+  ADMIN_ADJUSTMENT
+}
+
+/// Append-only ledger. UPDATE/DELETE are rejected by a trigger.
+model WalletTransaction {
+  id             String        @id @default(uuid()) @db.Uuid
+  userId         String        @map("user_id") @db.Uuid
+  type           WalletTxnType
+  /// Signed coin delta: positive = credit, negative = debit.
+  amount         Int
+  balanceAfter   Int           @map("balance_after")
+  /// e.g. "reward:{claimId}", "purchase:{paymentId}", "unlock:{userId}:{episodeId}"
+  idempotencyKey String        @unique @map("idempotency_key") @db.VarChar(160)
+  referenceType  String?       @map("reference_type") @db.VarChar(40)
+  referenceId    String?       @map("reference_id") @db.Uuid
+  /// Admin who made an ADMIN_ADJUSTMENT.
+  actorId        String?       @map("actor_id") @db.Uuid
+  note           String?       @db.VarChar(280)
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  wallet UserWallet @relation(fields: [userId], references: [userId], onDelete: Restrict)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([referenceType, referenceId])
+  @@map("wallet_transactions")
+}
+
+enum RewardClaimStatus {
+  PENDING
+  VERIFIED
+  GRANTED
+  REJECTED
+  EXPIRED
+}
+
+enum RewardPurpose {
+  COINS
+  EPISODE_UNLOCK
+}
+
+/// Server-issued intent before a rewarded ad is shown. The reward is granted only
+/// after the ad network's server-side verification callback references this claim.
+model RewardClaim {
+  id                    String            @id @default(uuid()) @db.Uuid
+  userId                String            @map("user_id") @db.Uuid
+  placementId           String            @map("placement_id") @db.Uuid
+  purpose               RewardPurpose
+  episodeId             String?           @map("episode_id") @db.Uuid
+  coins                 Int               @default(0)
+  /// Opaque value sent to AdMob as SSV custom_data; unique per claim.
+  nonce                 String            @unique @db.VarChar(64)
+  status                RewardClaimStatus @default(PENDING)
+  provider              String            @default("ADMOB") @db.VarChar(20)
+  /// AdMob SSV transaction_id — unique, blocks callback replays.
+  providerTransactionId String?           @unique @map("provider_transaction_id") @db.VarChar(128)
+  ssvPayload            Json?             @map("ssv_payload")
+  rejectionReason       String?           @map("rejection_reason") @db.VarChar(120)
+  expiresAt             DateTime          @map("expires_at")
+  verifiedAt            DateTime?         @map("verified_at")
+  grantedAt             DateTime?         @map("granted_at")
+  createdAt             DateTime          @default(now()) @map("created_at")
+  updatedAt             DateTime          @updatedAt @map("updated_at")
+
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  placement AdPlacement @relation(fields: [placementId], references: [id])
+  episode   Episode?    @relation(fields: [episodeId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([status, expiresAt])
+  @@map("reward_claims")
+}
+
+enum UnlockMethod {
+  COINS
+  AD_REWARD
+  ADMIN_GRANT
+  PROMO
+}
+
+model EpisodeUnlock {
+  id                  String       @id @default(uuid()) @db.Uuid
+  userId              String       @map("user_id") @db.Uuid
+  episodeId           String       @map("episode_id") @db.Uuid
+  method              UnlockMethod
+  walletTransactionId String?      @unique @map("wallet_transaction_id") @db.Uuid
+  rewardClaimId       String?      @unique @map("reward_claim_id") @db.Uuid
+  /// Null = permanent unlock.
+  expiresAt           DateTime?    @map("expires_at")
+  createdAt           DateTime     @default(now()) @map("created_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  episode Episode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, episodeId])
+  @@map("episode_unlocks")
+}
+
+// ───────────────────────────── Payments & subscriptions ─────────────────────────────
+
+enum StoreProvider {
+  GOOGLE_PLAY
+  APP_STORE
+}
+
+enum ProductKind {
+  COIN_PACK
+  SUBSCRIPTION
+}
+
+/// Catalogue of store products (coin packs and subscription plans).
+model Product {
+  id         String      @id @default(uuid()) @db.Uuid
+  /// Store SKU, identical across providers where possible, e.g. "coins_100", "vip_monthly".
+  sku        String      @unique @db.VarChar(100)
+  kind       ProductKind
+  title      String      @db.VarChar(80)
+  coins      Int?
+  bonusCoins Int         @default(0) @map("bonus_coins")
+  /// Subscription period in days (30, 365) for SUBSCRIPTION products.
+  periodDays Int?        @map("period_days")
+  adFree     Boolean     @default(false) @map("ad_free")
+  isActive   Boolean     @default(true) @map("is_active")
+  sortOrder  Int         @default(0) @map("sort_order")
+  createdAt  DateTime    @default(now()) @map("created_at")
+  updatedAt  DateTime    @updatedAt @map("updated_at")
+
+  subscriptions Subscription[]
+  payments      PaymentTransaction[]
+
+  @@map("products")
+}
+
+enum PaymentStatus {
+  PENDING
+  VERIFIED
+  FULFILLED
+  FAILED
+  REFUNDED
+  REVOKED
+}
+
+model PaymentTransaction {
+  id                    String        @id @default(uuid()) @db.Uuid
+  userId                String        @map("user_id") @db.Uuid
+  productId             String        @map("product_id") @db.Uuid
+  provider              StoreProvider
+  /// Google Play orderId / App Store transactionId — unique => idempotent fulfilment.
+  providerTransactionId String        @map("provider_transaction_id") @db.VarChar(200)
+  /// Google Play purchaseToken (needed for acknowledge/refund lookups).
+  purchaseToken         String?       @map("purchase_token")
+  status                PaymentStatus @default(PENDING)
+  priceAmountMicros     BigInt?       @map("price_amount_micros")
+  currency              String?       @db.VarChar(3)
+  /// Verified store response, minus anything sensitive.
+  verificationPayload   Json?         @map("verification_payload")
+  verifiedAt            DateTime?     @map("verified_at")
+  fulfilledAt           DateTime?     @map("fulfilled_at")
+  refundedAt            DateTime?     @map("refunded_at")
+  createdAt             DateTime      @default(now()) @map("created_at")
+  updatedAt             DateTime      @updatedAt @map("updated_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Restrict)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([provider, providerTransactionId])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([status, createdAt])
+  @@map("payment_transactions")
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  IN_GRACE_PERIOD
+  ON_HOLD
+  CANCELED
+  EXPIRED
+  REVOKED
+}
+
+model Subscription {
+  id                     String             @id @default(uuid()) @db.Uuid
+  userId                 String             @map("user_id") @db.Uuid
+  productId              String             @map("product_id") @db.Uuid
+  provider               StoreProvider
+  /// Google Play linkedPurchaseToken chain root / App Store originalTransactionId.
+  providerSubscriptionId String             @map("provider_subscription_id") @db.VarChar(200)
+  status                 SubscriptionStatus
+  currentPeriodStart     DateTime           @map("current_period_start")
+  currentPeriodEnd       DateTime           @map("current_period_end")
+  autoRenew              Boolean            @default(true) @map("auto_renew")
+  canceledAt             DateTime?          @map("canceled_at")
+  createdAt              DateTime           @default(now()) @map("created_at")
+  updatedAt              DateTime           @updatedAt @map("updated_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Restrict)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([provider, providerSubscriptionId])
+  @@index([userId, status, currentPeriodEnd])
+  @@map("subscriptions")
+}
+
+// ───────────────────────────── Advertising ─────────────────────────────
+
+enum AdFormat {
+  REWARDED
+  INTERSTITIAL
+  NATIVE
+  SPONSORED_CARD
+  SPONSORED_VIDEO
+}
+
+/// A slot in the app where an ad may appear, e.g. "episode_unlock_rewarded".
+model AdPlacement {
+  id          String   @id @default(uuid()) @db.Uuid
+  key         String   @unique @db.VarChar(60)
+  name        String   @db.VarChar(80)
+  format      AdFormat
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  configurations AdConfiguration[]
+  rewardClaims   RewardClaim[]
+  impressions    AdImpression[]
+  clicks         AdClick[]
+  campaigns      AdCampaignPlacement[]
+
+  @@map("ad_placements")
+}
+
+enum AdSource {
+  ADMOB
+  DIRECT
+}
+
+/// Eligibility + frequency rules for a placement. The client reads the active row.
+model AdConfiguration {
+  id                 String   @id @default(uuid()) @db.Uuid
+  placementId        String   @map("placement_id") @db.Uuid
+  source             AdSource
+  platform           Platform
+  /// AdMob ad unit id for this platform; null for DIRECT.
+  adUnitId           String?  @map("ad_unit_id") @db.VarChar(120)
+  /// Interstitial: show at most once every N episode transitions.
+  minEpisodesBetween Int?     @map("min_episodes_between")
+  minSecondsBetween  Int?     @map("min_seconds_between")
+  maxPerUserPerDay   Int?     @map("max_per_user_per_day")
+  rewardCoins        Int?     @map("reward_coins")
+  hideForSubscribers Boolean  @default(true) @map("hide_for_subscribers")
+  isActive           Boolean  @default(true) @map("is_active")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  placement AdPlacement @relation(fields: [placementId], references: [id], onDelete: Cascade)
+
+  @@unique([placementId, platform, source])
+  @@map("ad_configurations")
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELED
+}
+
+enum PricingModel {
+  CPM
+  CPC
+  FLAT
+}
+
+/// First-party campaigns for directly contracted advertisers.
+model AdCampaign {
+  id                 String         @id @default(uuid()) @db.Uuid
+  name               String         @db.VarChar(120)
+  advertiserName     String         @map("advertiser_name") @db.VarChar(120)
+  advertiserContact  String?        @map("advertiser_contact") @db.VarChar(200)
+  status             CampaignStatus @default(DRAFT)
+  startAt            DateTime       @map("start_at")
+  endAt              DateTime       @map("end_at")
+  pricingModel       PricingModel   @map("pricing_model")
+  /// Contracted rate in paise (per 1000 impressions for CPM, per click for CPC, total for FLAT).
+  ratePaise          BigInt         @map("rate_paise")
+  totalBudgetPaise   BigInt?        @map("total_budget_paise")
+  dailyImpressionCap Int?           @map("daily_impression_cap")
+  perUserDailyCap    Int?           @map("per_user_daily_cap")
+  priority           Int            @default(0)
+  /// { "languages": ["hi"], "platforms": ["ANDROID"], "categories": ["…"] }
+  targeting          Json           @default("{}")
+  createdBy          String?        @map("created_by") @db.Uuid
+  createdAt          DateTime       @default(now()) @map("created_at")
+  updatedAt          DateTime       @updatedAt @map("updated_at")
+
+  creatives   AdCreative[]
+  placements  AdCampaignPlacement[]
+  impressions AdImpression[]
+  clicks      AdClick[]
+
+  @@index([status, startAt, endAt])
+  @@map("ad_campaigns")
+}
+
+model AdCampaignPlacement {
+  campaignId  String @map("campaign_id") @db.Uuid
+  placementId String @map("placement_id") @db.Uuid
+
+  campaign  AdCampaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  placement AdPlacement @relation(fields: [placementId], references: [id], onDelete: Cascade)
+
+  @@id([campaignId, placementId])
+  @@index([placementId])
+  @@map("ad_campaign_placements")
+}
+
+enum CreativeType {
+  IMAGE
+  VIDEO
+}
+
+enum CreativeReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model AdCreative {
+  id             String               @id @default(uuid()) @db.Uuid
+  campaignId     String               @map("campaign_id") @db.Uuid
+  type           CreativeType
+  mediaKey       String               @map("media_key")
+  headline       String?              @db.VarChar(90)
+  ctaText        String?              @map("cta_text") @db.VarChar(30)
+  /// https only, validated server-side.
+  destinationUrl String               @map("destination_url")
+  /// Always rendered; defaults to "Sponsored" / "प्रायोजित".
+  label          String               @default("Sponsored") @db.VarChar(30)
+  reviewStatus   CreativeReviewStatus @default(PENDING) @map("review_status")
+  reviewedBy     String?              @map("reviewed_by") @db.Uuid
+  isActive       Boolean              @default(true) @map("is_active")
+  createdAt      DateTime             @default(now()) @map("created_at")
+  updatedAt      DateTime             @updatedAt @map("updated_at")
+
+  campaign    AdCampaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  impressions AdImpression[]
+  clicks      AdClick[]
+
+  @@index([campaignId, reviewStatus, isActive])
+  @@map("ad_creatives")
+}
+
+/// Direct-campaign impressions only. AdMob impressions are reported by Google.
+model AdImpression {
+  id          String   @id @default(uuid()) @db.Uuid
+  campaignId  String   @map("campaign_id") @db.Uuid
+  creativeId  String   @map("creative_id") @db.Uuid
+  placementId String   @map("placement_id") @db.Uuid
+  userId      String?  @map("user_id") @db.Uuid
+  /// Server-issued serve token; unique => one impression per serve.
+  serveId     String   @unique @map("serve_id") @db.VarChar(64)
+  platform    Platform
+  occurredAt  DateTime @default(now()) @map("occurred_at")
+
+  campaign  AdCampaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  creative  AdCreative  @relation(fields: [creativeId], references: [id], onDelete: Cascade)
+  placement AdPlacement @relation(fields: [placementId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId, occurredAt])
+  @@index([userId, campaignId, occurredAt])
+  @@map("ad_impressions")
+}
+
+model AdClick {
+  id          String   @id @default(uuid()) @db.Uuid
+  campaignId  String   @map("campaign_id") @db.Uuid
+  creativeId  String   @map("creative_id") @db.Uuid
+  placementId String   @map("placement_id") @db.Uuid
+  userId      String?  @map("user_id") @db.Uuid
+  /// One counted click per serve.
+  serveId     String   @unique @map("serve_id") @db.VarChar(64)
+  platform    Platform
+  occurredAt  DateTime @default(now()) @map("occurred_at")
+
+  campaign  AdCampaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  creative  AdCreative  @relation(fields: [creativeId], references: [id], onDelete: Cascade)
+  placement AdPlacement @relation(fields: [placementId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId, occurredAt])
+  @@map("ad_clicks")
+}
+
+/// Imported AdMob reporting (network revenue). Kept separate from direct-campaign billing.
+model AdNetworkDailyReport {
+  id                      String   @id @default(uuid()) @db.Uuid
+  source                  AdSource @default(ADMOB)
+  reportDate              DateTime @map("report_date") @db.Date
+  adUnitId                String   @map("ad_unit_id") @db.VarChar(120)
+  impressions             Int
+  clicks                  Int
+  estimatedEarningsMicros BigInt   @map("estimated_earnings_micros")
+  currency                String   @db.VarChar(3)
+  importedAt              DateTime @default(now()) @map("imported_at")
+
+  @@unique([source, reportDate, adUnitId])
+  @@map("ad_network_daily_reports")
+}
+
+// ───────────────────────────── Notifications & audit ─────────────────────────────
+
+enum NotificationJobStatus {
+  DRAFT
+  SCHEDULED
+  SENDING
+  SENT
+  FAILED
+  CANCELED
+}
+
+model NotificationJob {
+  id           String                @id @default(uuid()) @db.Uuid
+  title        Json
+  body         Json
+  /// Deep link, e.g. "reeldrama://drama/{id}"
+  deepLink     String?               @map("deep_link")
+  /// { "all": true } | { "userIds": [...] } | { "languages": ["hi"] }
+  audience     Json
+  status       NotificationJobStatus @default(DRAFT)
+  scheduledAt  DateTime?             @map("scheduled_at")
+  sentAt       DateTime?             @map("sent_at")
+  successCount Int                   @default(0) @map("success_count")
+  failureCount Int                   @default(0) @map("failure_count")
+  lastError    String?               @map("last_error")
+  createdBy    String?               @map("created_by") @db.Uuid
+  createdAt    DateTime              @default(now()) @map("created_at")
+  updatedAt    DateTime              @updatedAt @map("updated_at")
+
+  @@index([status, scheduledAt])
+  @@map("notification_jobs")
+}
+
+/// Append-only record of privileged actions. UPDATE/DELETE are rejected by a trigger.
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  actorId    String?  @map("actor_id") @db.Uuid
+  action     String   @db.VarChar(80)
+  entityType String   @map("entity_type") @db.VarChar(40)
+  entityId   String?  @map("entity_id") @db.VarChar(64)
+  before     Json?
+  after      Json?
+  requestId  String?  @map("request_id") @db.VarChar(64)
+  ipAddress  String?  @map("ip_address") @db.VarChar(45)
+  userAgent  String?  @map("user_agent") @db.VarChar(255)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([actorId, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+  @@map("audit_logs")
+}
