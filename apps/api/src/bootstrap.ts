@@ -16,7 +16,7 @@ export function configureApp(app: INestApplication, env: Env) {
     origin: origins.length ? origins : false,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     allowedHeaders: ['Authorization', 'Content-Type', 'Accept-Language', 'Idempotency-Key', 'x-request-id'],
-    exposedHeaders: ['x-request-id'],
+    exposedHeaders: ['x-request-id', 'Content-Disposition'],
     maxAge: 600,
   });
 

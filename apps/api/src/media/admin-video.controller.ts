@@ -1,10 +1,11 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Put, Query, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Post, Put, Query, Req } from '@nestjs/common';
 import { ApiBearerAuth, ApiProperty, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
 import { VideoAssetStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Matches, Max, Min } from 'class-validator';
 import type { Request } from 'express';
 import { RequirePermissions } from '../auth/decorators';
+import { MAX_SUBTITLE_BYTES, SubtitlesService } from './subtitles.service';
 import { VIDEO_TYPES, VideoAssetsService } from './video-assets.service';
 
 class CreateUploadDto {
@@ -16,6 +17,17 @@ class CreateUploadDto {
   @IsInt()
   @Min(1)
   sizeBytes: number;
+}
+
+class SubtitleUploadDto {
+  @ApiProperty({ example: 'hi' }) @IsString() @Matches(/^[a-z]{2}$/) language: string;
+  @ApiProperty({ maximum: MAX_SUBTITLE_BYTES }) @IsInt() @Min(8) @Max(MAX_SUBTITLE_BYTES) sizeBytes: number;
+}
+
+class SubtitleCompleteDto {
+  @ApiProperty({ example: 'hi' }) @IsString() @Matches(/^[a-z]{2}$/) language: string;
+  @ApiProperty({ example: 'हिन्दी' }) @IsString() @Length(1, 40) label: string;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() isDefault?: boolean;
 }
 
 class SetCurrentAssetDto {
@@ -33,7 +45,10 @@ class ListAssetsQuery {
 @ApiBearerAuth()
 @Controller('admin')
 export class AdminVideoController {
-  constructor(private readonly assets: VideoAssetsService) {}
+  constructor(
+    private readonly assets: VideoAssetsService,
+    private readonly subtitles: SubtitlesService,
+  ) {}
 
   @Post('episodes/:id/video-assets')
   @RequirePermissions('media:write')
@@ -70,5 +85,30 @@ export class AdminVideoController {
   @RequirePermissions('media:write')
   setCurrent(@Req() req: Request, @Param('id', new ParseUUIDPipe()) id: string, @Body() body: SetCurrentAssetDto) {
     return this.assets.setCurrent(req, id, body.assetId);
+  }
+
+  @Get('episodes/:id/subtitles')
+  @RequirePermissions('media:write')
+  listSubtitles(@Param('id', new ParseUUIDPipe()) id: string) {
+    return this.subtitles.list(id);
+  }
+
+  @Post('episodes/:id/subtitles/upload-url')
+  @RequirePermissions('media:write')
+  subtitleUpload(@Param('id', new ParseUUIDPipe()) id: string, @Body() body: SubtitleUploadDto) {
+    return this.subtitles.createUpload(id, body.language, body.sizeBytes);
+  }
+
+  @Post('episodes/:id/subtitles')
+  @RequirePermissions('media:write')
+  completeSubtitle(@Req() req: Request, @Param('id', new ParseUUIDPipe()) id: string, @Body() body: SubtitleCompleteDto) {
+    return this.subtitles.complete(req, id, body);
+  }
+
+  @Delete('subtitles/:id')
+  @HttpCode(204)
+  @RequirePermissions('media:write')
+  async deleteSubtitle(@Req() req: Request, @Param('id', new ParseUUIDPipe()) id: string) {
+    await this.subtitles.remove(req, id);
   }
 }

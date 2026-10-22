@@ -86,6 +86,8 @@ export class UsersService {
         push: user.profile?.pushEnabled ?? true,
       },
       roles: user.roles.map((r) => r.role.key),
+      // Effective permissions so clients (admin UI) can gate custom roles too; the API still enforces them.
+      permissions: toAuthUser(user).permissions,
       wallet: { balance: user.wallet?.balance ?? 0 },
       subscription: subscription
         ? {

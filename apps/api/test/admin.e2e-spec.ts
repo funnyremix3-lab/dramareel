@@ -189,7 +189,9 @@ describe('Admin API (e2e)', () => {
       expect(put.status).toBe(200);
       await http.post(`/api/v1/admin/ads/campaigns/${c.body.id}/creatives`).set(as('ads')).send({ type: 'IMAGE', mediaKey: up.body.key, destinationUrl: 'http://insecure.example' }).expect(400);
       const creative = await http.post(`/api/v1/admin/ads/campaigns/${c.body.id}/creatives`).set(as('ads')).send({ type: 'IMAGE', mediaKey: up.body.key, headline: 'Hello', destinationUrl: 'https://advertiser.example/offer' }).expect(201);
-      await http.post(`/api/v1/admin/ads/creatives/${creative.body.id}/review`).set(as('ads')).send({ decision: 'APPROVED' }).expect(200);
+      // The campaign creator cannot approve their own creative; the owner can.
+      await http.post(`/api/v1/admin/ads/creatives/${creative.body.id}/review`).set(as('ads')).send({ decision: 'APPROVED' }).expect(403);
+      await http.post(`/api/v1/admin/ads/creatives/${creative.body.id}/review`).set(as('owner')).send({ decision: 'APPROVED' }).expect(200);
       await http.post(`/api/v1/admin/ads/campaigns/${c.body.id}/activate`).set(as('ads')).expect(200);
 
       const served = await http.get('/api/v1/ads/serve').query({ placement: 'home_sponsored_card', platform: 'ANDROID' }).set('Accept-Language', 'en').expect(200);

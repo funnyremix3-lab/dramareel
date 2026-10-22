@@ -68,6 +68,7 @@ async function serve(
   headers.set('Content-Type', CONTENT_TYPES[ext] ?? headers.get('Content-Type') ?? 'application/octet-stream');
   headers.set('ETag', object.httpEtag);
   headers.set('Accept-Ranges', 'bytes');
+  headers.set('Cross-Origin-Resource-Policy', 'cross-origin');
   // Browsers/players may cache playlists briefly; segments and images are immutable per encode.
   headers.set('Cache-Control', isPlaylist ? 'private, max-age=60' : tokenised ? 'private, max-age=86400' : 'public, max-age=86400');
 

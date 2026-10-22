@@ -57,6 +57,8 @@ export class DevMediaController {
     res.status(object.contentRange ? 206 : 200);
     res.setHeader('Content-Type', CONTENT_TYPES[ext] ?? object.contentType ?? 'application/octet-stream');
     res.setHeader('Cache-Control', cache);
+    // helmet defaults CORP to same-origin; media must load in the admin (another origin) too.
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     res.setHeader('Accept-Ranges', 'bytes');
     if (object.contentLength !== undefined) res.setHeader('Content-Length', String(object.contentLength));
     if (object.contentRange) res.setHeader('Content-Range', object.contentRange);

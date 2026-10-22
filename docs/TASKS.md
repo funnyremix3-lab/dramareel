@@ -33,7 +33,9 @@ Add newly discovered work at the right place instead of doing it silently.
 ## Phase 8 — admin, ops, deployment
 - [x] API admin endpoints: dramas/episodes CRUD+publish, categories, users, moderation, ad placements/campaigns/creatives, reports CSV, roles, audit log, notifications, overview metrics
 - [x] workers/notifications (FCM HTTP v1, scheduled jobs)
-- [ ] apps/admin (Next.js + Tailwind + TanStack Query + Zod), RBAC route protection
+- [x] apps/admin (Next.js + Tailwind + TanStack Query + Zod), RBAC route protection
+- [x] Admin follow-ups: /me returns permissions (custom roles), dev-media CORP cross-origin, expose Content-Disposition, creative self-approval guard, subtitles admin API, docs/api.md routes match controllers
+- [ ] Mobile: render subtitles (WebVTT text tracks) when available
 - [x] API Dockerfile, compose services for api/workers/admin
 - [x] CI workflow (lint, typecheck, tests)
 - [x] docs/deployment.md (env checklist, migrations, backup/restore, HTTPS, health, monitoring, Android build, store checklist, cost monitoring)

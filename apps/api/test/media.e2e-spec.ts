@@ -109,6 +109,38 @@ describe('Media: playback authorization & uploads (e2e)', () => {
     });
   });
 
+  describe('subtitles', () => {
+    const put = async (episodeId: string, lang: string, text: string, token: string) => {
+      const bytes = Buffer.from(text, 'utf8');
+      const up = await http.post(`/api/v1/admin/episodes/${episodeId}/subtitles/upload-url`).set(auth(token)).send({ language: lang, sizeBytes: bytes.length }).expect(201);
+      const res = await fetch(up.body.uploadUrl, { method: 'PUT', headers: up.body.headers, body: bytes });
+      expect(res.status).toBe(200);
+    };
+
+    it('accepts only real WebVTT, lists it in playback, and deletes cleanly', async () => {
+      const content = await tokenFor('dev-content');
+      const epId = await episodeId(1);
+      await readyAsset(1);
+
+      await put(epId, 'hi', 'not a subtitle file', content);
+      await http.post(`/api/v1/admin/episodes/${epId}/subtitles`).set(auth(content)).send({ language: 'hi', label: 'हिन्दी' }).expect(400);
+
+      await put(epId, 'hi', 'WEBVTT\n\n00:00.000 --> 00:02.000\nनमस्ते\n', content);
+      const row = await http.post(`/api/v1/admin/episodes/${epId}/subtitles`).set(auth(content)).send({ language: 'hi', label: 'हिन्दी', isDefault: true }).expect(201);
+      await http.post(`/api/v1/admin/episodes/${epId}/subtitles`).set(auth(await tokenFor('dev-ads'))).send({ language: 'hi', label: 'x' }).expect(403);
+      await http.post(`/api/v1/admin/episodes/${epId}/subtitles/upload-url`).set(auth(content)).send({ language: 'xx', sizeBytes: 100 }).expect(400);
+
+      const playback = await http.get(`/api/v1/episodes/${epId}/playback`).set(auth(await tokenFor(freshSub()))).expect(200);
+      expect(playback.body.subtitles).toEqual([expect.objectContaining({ language: 'hi', label: 'हिन्दी', isDefault: true, url: expect.stringContaining('subtitles/') })]);
+      const vtt = await fetch(playback.body.subtitles[0].url);
+      expect(await vtt.text()).toContain('नमस्ते');
+
+      await http.delete(`/api/v1/admin/subtitles/${row.body.id}`).set(auth(content)).expect(204);
+      const after = await http.get(`/api/v1/episodes/${epId}/playback`).set(auth(await tokenFor(freshSub()))).expect(200);
+      expect(after.body.subtitles).toEqual([]);
+    });
+  });
+
   describe('admin uploads', () => {
     const upload = (token: string, epId: string, body: object) =>
       http.post(`/api/v1/admin/episodes/${epId}/video-assets`).set(auth(token)).send(body);

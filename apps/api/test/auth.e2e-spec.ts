@@ -113,5 +113,6 @@ describe('Auth & /me (e2e)', () => {
   it('seeded admin roles resolve to permissions', async () => {
     const res = await http.get('/api/v1/me').set(auth(await tokenFor('dev-owner'))).expect(200);
     expect(res.body.roles).toEqual(['OWNER']);
+    expect(res.body.permissions).toEqual(['*']);
   });
 });

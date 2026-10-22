@@ -199,8 +199,12 @@ export class AdminAdsService {
 
   /** Review is a separate step so whoever uploads cannot self-approve unchecked content. */
   async reviewCreative(req: Request, id: string, decision: 'APPROVED' | 'REJECTED') {
-    const before = await this.prisma.adCreative.findUnique({ where: { id } });
+    const before = await this.prisma.adCreative.findUnique({ where: { id }, include: { campaign: { select: { createdBy: true } } } });
     if (!before) throw notFound('Creative');
+    // Four-eyes rule: the person who created the campaign cannot approve its creatives (owners excepted).
+    if (decision === 'APPROVED' && before.campaign.createdBy === req.user?.id && !req.user?.permissions.includes('*')) {
+      throw new AppException('FORBIDDEN', 'Another ads manager or the owner must approve this creative');
+    }
     const after = await this.prisma.adCreative.update({ where: { id }, data: { reviewStatus: decision, reviewedBy: req.user?.id } });
     await this.audit.record(req, { action: `ad_creative.${decision.toLowerCase()}`, entityType: 'ad_creative', entityId: id, before: { reviewStatus: before.reviewStatus }, after: { reviewStatus: decision } });
     return after;
