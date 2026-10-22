@@ -25,16 +25,16 @@ Add newly discovered work at the right place instead of doing it silently.
 - [x] Payments: react-native-iap purchase flow → server verify
 - [x] Push token registration (expo-notifications, FCM)
 - [x] Sentry init (DSN optional)
-- [ ] Consent-gated product analytics (client events → API → admin reports)
+- [x] Consent-gated product analytics (client events → API → admin reports)
 - [x] Jest tests: logic, api client, i18n parity, key components; Maestro e2e flow file
 - [x] `expo export` bundles for Android; expo-doctor 20/20
 - [ ] Native Android build (expo run:android / EAS) and on-device run — needs Android SDK+JDK or an Expo account
 
 ## Phase 8 — admin, ops, deployment
 - [x] API admin endpoints: dramas/episodes CRUD+publish, categories, users, moderation, ad placements/campaigns/creatives, reports CSV, roles, audit log, notifications, overview metrics
-- [ ] workers/notifications (FCM HTTP v1, scheduled jobs)
+- [x] workers/notifications (FCM HTTP v1, scheduled jobs)
 - [ ] apps/admin (Next.js + Tailwind + TanStack Query + Zod), RBAC route protection
-- [ ] API Dockerfile, compose services for api/workers/admin
-- [ ] CI workflow (lint, typecheck, tests)
-- [ ] docs/deployment.md (env checklist, migrations, backup/restore, HTTPS, health, monitoring, Android build, store checklist, cost monitoring)
+- [x] API Dockerfile, compose services for api/workers/admin
+- [x] CI workflow (lint, typecheck, tests)
+- [x] docs/deployment.md (env checklist, migrations, backup/restore, HTTPS, health, monitoring, Android build, store checklist, cost monitoring)
 - [ ] Final README pass
