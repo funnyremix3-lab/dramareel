@@ -1,0 +1,20 @@
+{
+  "name": "@reel-drama/api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "prisma:validate": "prisma validate",
+    "prisma:generate": "prisma generate",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:migrate:status": "prisma migrate status"
+  },
+  "dependencies": {
+    "@prisma/client": "6.16.2"
+  },
+  "devDependencies": {
+    "prisma": "6.16.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
