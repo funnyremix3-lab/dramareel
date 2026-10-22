@@ -1,4 +1,4 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication, RequestMethod, ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { Env } from './config/env';
@@ -7,7 +7,8 @@ export const API_PREFIX = 'api/v1';
 
 /** Shared HTTP setup for main.ts and integration tests. */
 export function configureApp(app: INestApplication, env: Env) {
-  app.setGlobalPrefix(API_PREFIX);
+  // The dev media proxy mimics the CDN path, so it lives outside /api/v1.
+  app.setGlobalPrefix(API_PREFIX, { exclude: [{ path: 'dev-media/*path', method: RequestMethod.GET }] });
   app.use(helmet());
 
   const origins = env.CORS_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean);

@@ -24,15 +24,13 @@ services:
       interval: 3s
       retries: 20
 
-  minio:
-    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: reeldrama
-      MINIO_ROOT_PASSWORD: reeldrama-secret
-    ports: ["9000:9000", "9001:9001"]
-    volumes: [miniodata:/data]
+  # S3-compatible object storage for local dev (production uses Cloudflare R2).
+  s3:
+    image: chrislusf/seaweedfs:4.48
+    command: server -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json -dir=/data -volume.max=0 -master.volumeSizeLimitMB=256
+    ports: ["9000:8333"]
+    volumes: [s3data:/data, ./s3.json:/etc/seaweedfs/s3.json:ro]
 
 volumes:
   pgdata:
-  miniodata:
+  s3data:

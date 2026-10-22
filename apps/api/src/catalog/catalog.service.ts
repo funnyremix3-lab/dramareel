@@ -71,6 +71,25 @@ export class CatalogService {
     };
   }
 
+  /** Published drama summaries keyed by id (unpublished ids are simply absent). */
+  async summariesByIds(ids: string[], locale: Locale) {
+    if (ids.length === 0) return new Map<string, ReturnType<CatalogService['toSummary']>>();
+    const rows = await this.prisma.drama.findMany({
+      where: { id: { in: [...new Set(ids)] }, ...this.published() },
+      select: summarySelect(locale),
+    });
+    return new Map(rows.map((r) => [r.id, this.toSummary(r)]));
+  }
+
+  private async likedSet(userId: string | undefined, episodeIds: string[]): Promise<Set<string>> {
+    if (!userId || episodeIds.length === 0) return new Set();
+    const rows = await this.prisma.like.findMany({
+      where: { userId, episodeId: { in: episodeIds } },
+      select: { episodeId: true },
+    });
+    return new Set(rows.map((r) => r.episodeId));
+  }
+
   async listCategories(locale: Locale) {
     const rows = await this.prisma.category.findMany({
       where: { isActive: true },
@@ -188,13 +207,16 @@ export class CatalogService {
       },
     });
     const page = rows.slice(0, query.limit);
-    const access = await this.entitlements.evaluate(
-      userId,
-      page.map((episode) => ({ episode, drama })),
-    );
+    const [access, liked] = await Promise.all([
+      this.entitlements.evaluate(
+        userId,
+        page.map((episode) => ({ episode, drama })),
+      ),
+      this.likedSet(userId, page.map((e) => e.id)),
+    ]);
 
     const result: Page<ReturnType<typeof mapEpisode>> = {
-      items: page.map((e) => mapEpisode(e, access.get(e.id)!.allowed, unlockPrice(e, drama), this.media)),
+      items: page.map((e) => mapEpisode(e, access.get(e.id)!.allowed, unlockPrice(e, drama), this.media, liked.has(e.id))),
       nextCursor: rows.length > query.limit ? encodeCursor({ n: page[page.length - 1].number }) : null,
     };
     return result;
@@ -279,16 +301,19 @@ export class CatalogService {
       });
       const byDrama = new Map(firstEpisodes.map((e) => [e.dramaId, e]));
       const withEpisode = dramas.filter((d) => byDrama.has(d.id));
-      const access = await this.entitlements.evaluate(
-        userId,
-        withEpisode.map((drama) => ({ episode: byDrama.get(drama.id)!, drama })),
-      );
+      const [access, liked] = await Promise.all([
+        this.entitlements.evaluate(
+          userId,
+          withEpisode.map((drama) => ({ episode: byDrama.get(drama.id)!, drama })),
+        ),
+        this.likedSet(userId, firstEpisodes.map((e) => e.id)),
+      ]);
 
       return withEpisode.map((d) => {
         const e = byDrama.get(d.id)!;
         return {
           drama: this.toSummary(d),
-          episode: mapEpisode(e, access.get(e.id)!.allowed, unlockPrice(e, d), this.media),
+          episode: mapEpisode(e, access.get(e.id)!.allowed, unlockPrice(e, d), this.media, liked.has(e.id)),
         };
       });
     });
@@ -310,6 +335,7 @@ function mapEpisode(
   allowed: boolean,
   price: number,
   media: MediaUrlService,
+  liked: boolean,
 ) {
   return {
     id: e.id,
@@ -322,5 +348,6 @@ function mapEpisode(
     unlockCoins: allowed ? null : price,
     likeCount: e.likeCount,
     commentCount: e.commentCount,
+    liked,
   };
 }

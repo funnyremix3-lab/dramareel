@@ -27,8 +27,24 @@ export const envSchema = z
     /** Local/test token issuer. Rejected in production. */
     DEV_JWT_SECRET: optionalString,
 
-    /** Public base URL for posters/thumbnails (not video). */
-    MEDIA_PUBLIC_BASE_URL: z.string().default('http://localhost:3000/dev-media/public'),
+    /** Base URL for public images; keys already start with `public/` (posters, thumbnails). Never video. */
+    MEDIA_PUBLIC_BASE_URL: z.string().default('http://localhost:3000/dev-media'),
+
+    /** S3-compatible storage: Cloudflare R2 in production, SeaweedFS locally. */
+    S3_ENDPOINT: optionalString,
+    S3_REGION: z.string().default('auto'),
+    S3_BUCKET: z.string().default('reel-drama-dev'),
+    S3_ACCESS_KEY_ID: optionalString,
+    S3_SECRET_ACCESS_KEY: optionalString,
+    S3_FORCE_PATH_STYLE: bool.default(true),
+    UPLOAD_MAX_BYTES: z.coerce.number().int().positive().default(2 * 1024 * 1024 * 1024),
+
+    /** Base URL of the media edge (Cloudflare Worker) — playback URLs are `${MEDIA_BASE_URL}/p/{token}/{assetId}/master.m3u8`. */
+    MEDIA_BASE_URL: z.string().default('http://localhost:3000/dev-media'),
+    PLAYBACK_SIGNING_KEY: optionalString,
+    PLAYBACK_TOKEN_TTL_SECONDS: z.coerce.number().int().min(60).max(86_400).default(21_600),
+    /** Serve /dev-media from the API (local development only). */
+    DEV_MEDIA_PROXY: bool.default(false),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production') {
@@ -38,6 +54,15 @@ export const envSchema = z
       if (!env.SUPABASE_JWKS_URL && !env.SUPABASE_JWT_SECRET) {
         ctx.addIssue({ code: 'custom', path: ['SUPABASE_JWKS_URL'], message: 'an auth verifier is required in production' });
       }
+      if (env.DEV_MEDIA_PROXY) {
+        ctx.addIssue({ code: 'custom', path: ['DEV_MEDIA_PROXY'], message: 'must be false in production' });
+      }
+      if (!env.PLAYBACK_SIGNING_KEY) {
+        ctx.addIssue({ code: 'custom', path: ['PLAYBACK_SIGNING_KEY'], message: 'is required in production' });
+      }
+    }
+    if (env.PLAYBACK_SIGNING_KEY && Buffer.from(env.PLAYBACK_SIGNING_KEY, 'base64').length < 32) {
+      ctx.addIssue({ code: 'custom', path: ['PLAYBACK_SIGNING_KEY'], message: 'must be at least 32 bytes, base64-encoded' });
     }
     if (env.DEV_JWT_SECRET && env.DEV_JWT_SECRET.length < 32) {
       ctx.addIssue({ code: 'custom', path: ['DEV_JWT_SECRET'], message: 'must be at least 32 characters' });

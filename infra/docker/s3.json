@@ -1,0 +1,9 @@
+{
+  "identities": [
+    {
+      "name": "reeldrama-dev",
+      "credentials": [{ "accessKey": "reeldrama", "secretKey": "reeldrama-secret" }],
+      "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+    }
+  ]
+}

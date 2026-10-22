@@ -1,0 +1,15 @@
+# Cloudflare Worker that serves HLS from the private R2 bucket after checking playback tokens.
+# Deploy: npx wrangler secret put PLAYBACK_SIGNING_KEY && npx wrangler deploy
+name = "reel-drama-media"
+main = "src/index.ts"
+compatibility_date = "2025-09-01"
+
+# routes = [{ pattern = "media.example.com", custom_domain = true }]
+
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "reel-drama-prod"
+
+[vars]
+# Comma-separated origins allowed to fetch media from a browser (admin preview). Mobile apps ignore CORS.
+ALLOWED_ORIGINS = "https://admin.example.com"

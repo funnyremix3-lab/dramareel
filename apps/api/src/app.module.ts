@@ -1,17 +1,22 @@
 import { randomUUID } from 'node:crypto';
 import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
 import { AuthGuard } from './auth/auth.guard';
 import { AuthModule } from './auth/auth.module';
 import { CatalogModule } from './catalog/catalog.module';
+import { AuditModule } from './common/audit/audit.service';
 import { AllExceptionsFilter } from './common/errors/all-exceptions.filter';
+import { UserThrottlerGuard } from './common/http/user-throttler.guard';
 import { PrismaModule } from './common/prisma/prisma.service';
 import { ConfigModule } from './config/config.module';
 import { loadEnv } from './config/env';
+import { EngagementModule } from './engagement/engagement.module';
 import { EntitlementsModule } from './entitlements/entitlements.service';
 import { HealthModule } from './health/health.controller';
+import { MediaModule } from './media/media.module';
+import { QueueModule } from './queue/transcode-queue.service';
 import { UsersModule } from './users/users.module';
 
 const env = loadEnv();
@@ -37,15 +42,20 @@ const env = loadEnv();
     // In-memory limits for a single instance; switch to Redis storage before running >1 replica.
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 120 }]),
     PrismaModule,
+    AuditModule,
+    QueueModule,
     EntitlementsModule,
     AuthModule,
     UsersModule,
     CatalogModule,
+    MediaModule.register(),
+    EngagementModule,
     HealthModule,
   ],
   providers: [
-    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    // Order matters: authenticate first so limits can be tracked per user.
     { provide: APP_GUARD, useExisting: AuthGuard },
+    { provide: APP_GUARD, useClass: UserThrottlerGuard },
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
   ],
 })
