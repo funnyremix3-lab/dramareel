@@ -20,6 +20,12 @@ export class UsersService {
     if (user.status === 'SUSPENDED') throw new AppException('ACCOUNT_SUSPENDED', 'This account is suspended');
     if (user.status === 'DELETED') throw new AppException('UNAUTHENTICATED', 'This account no longer exists');
 
+    // Signing in again during the 30-day grace period cancels a deletion request. Only a token issued
+    // after the request counts, so a request still in flight from the old session cannot cancel it.
+    if (user.deletionRequestedAt && claims.issuedAt && claims.issuedAt * 1000 > user.deletionRequestedAt.getTime()) {
+      await this.prisma.user.update({ where: { id: user.id }, data: { deletionRequestedAt: null } });
+    }
+
     return toAuthUser(user);
   }
 

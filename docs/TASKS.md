@@ -37,4 +37,5 @@ Add newly discovered work at the right place instead of doing it silently.
 - [x] API Dockerfile, compose services for api/workers/admin
 - [x] CI workflow (lint, typecheck, tests)
 - [x] docs/deployment.md (env checklist, migrations, backup/restore, HTTPS, health, monitoring, Android build, store checklist, cost monitoring)
+- [x] Data retention: account-deletion purge after 30 days, cancel on sign-in, prune analytics/ad events > 13 months
 - [ ] Final README pass

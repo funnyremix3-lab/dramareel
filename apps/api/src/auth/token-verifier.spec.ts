@@ -25,7 +25,8 @@ function sign(secret: string, opts: { iss?: string; aud?: string; exp?: string |
 describe('TokenVerifier', () => {
   it('accepts a valid dev token', async () => {
     const claims = await new TokenVerifier(env()).verify(await sign(DEV_SECRET));
-    expect(claims).toEqual({ sub: 'dev-viewer', email: 'Viewer@Dev.Local', phone: undefined });
+    expect(claims).toMatchObject({ sub: 'dev-viewer', email: 'Viewer@Dev.Local', phone: undefined });
+    expect(claims.issuedAt).toEqual(expect.any(Number));
   });
 
   it('rejects a dev token signed with the wrong secret', async () => {

@@ -85,6 +85,31 @@ describe('Auth & /me (e2e)', () => {
     expect(del.body.deletionRequestedAt).toEqual(expect.any(String));
   });
 
+  it('a fresh sign-in cancels a pending deletion, but the old session cannot', async () => {
+    const sub = freshSub();
+    const oldToken = await tokenFor(sub);
+    await http.get('/api/v1/me').set(auth(oldToken)).expect(200);
+    await http.delete('/api/v1/me').set(auth(oldToken)).expect(200);
+
+    // A late request from the same (pre-deletion) session must not undo the request.
+    const stillPending = await http.get('/api/v1/me').set(auth(oldToken)).expect(200);
+    expect(stillPending.body.deletionRequestedAt).toEqual(expect.any(String));
+
+    // Signing in again later (token issued after the request) cancels it.
+    const secret = new TextEncoder().encode(process.env.DEV_JWT_SECRET!);
+    const { SignJWT } = await import('jose');
+    const newToken = await new SignJWT({})
+      .setProtectedHeader({ alg: 'HS256' })
+      .setSubject(sub)
+      .setIssuer('reel-drama-dev')
+      .setAudience('authenticated')
+      .setIssuedAt(Math.floor(Date.now() / 1000) + 2)
+      .setExpirationTime('10m')
+      .sign(secret);
+    const cancelled = await http.get('/api/v1/me').set(auth(newToken)).expect(200);
+    expect(cancelled.body.deletionRequestedAt).toBeNull();
+  });
+
   it('seeded admin roles resolve to permissions', async () => {
     const res = await http.get('/api/v1/me').set(auth(await tokenFor('dev-owner'))).expect(200);
     expect(res.body.roles).toEqual(['OWNER']);

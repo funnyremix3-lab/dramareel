@@ -108,5 +108,5 @@ Search starts with `ILIKE` on title over published dramas. That is fine at launc
 
 ## Backups & retention
 - Production: managed Postgres with daily snapshots and PITR (7 days minimum). A monthly restore drill goes to a scratch instance and is documented in `docs/deployment.md`.
-- Account deletion: the user is marked `deletionRequestedAt`. After a 30-day grace period, a job purges email, phone and profile data, anonymises comments and keeps the ledger rows, because financial records must be retained.
-- `ad_impressions` and `ad_clicks` older than 13 months are rolled up into daily aggregates, then deleted.
+- Account deletion: the user is marked `deletionRequestedAt`. Signing in again (a token issued after the request) cancels it. After 30 days the hourly retention job in `workers/notifications` purges email, phone, profile, device tokens, watch history and blocks, blanks comments, detaches analytics, and keeps ledger, payment and unlock rows because financial records must be retained.
+- `analytics_events`, `ad_impressions` and `ad_clicks` older than ~13 months are deleted by the same job (export reports first if long-term aggregates are needed).

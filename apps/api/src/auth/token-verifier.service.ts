@@ -39,6 +39,7 @@ export class TokenVerifier {
       sub: payload.sub,
       email: typeof payload.email === 'string' ? payload.email : undefined,
       phone: typeof payload.phone === 'string' && payload.phone ? payload.phone : undefined,
+      issuedAt: typeof payload.iat === 'number' ? payload.iat : undefined,
     };
   }
 

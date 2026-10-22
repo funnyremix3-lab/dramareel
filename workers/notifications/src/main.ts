@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import { dispatchDueJobs } from './dispatch';
 import { FcmSender, LogSender, PushSender } from './fcm';
+import { pruneOldEvents, purgeDeletedAccounts } from './retention';
 
 if (existsSync('.env')) process.loadEnvFile('.env');
 
@@ -24,11 +25,23 @@ const prisma = new PrismaClient();
 const sender: PushSender = config.FCM_SERVICE_ACCOUNT_JSON_PATH ? new FcmSender(config.FCM_SERVICE_ACCOUNT_JSON_PATH) : new LogSender();
 
 let stopping = false;
+let lastRetention = 0;
+const RETENTION_EVERY_MS = 60 * 60 * 1000;
 let running: Promise<unknown> | null = null;
 
 async function tick() {
   if (stopping) return;
-  running = dispatchDueJobs(prisma, sender, new Date(), log).catch((err: Error) => log('dispatch failed', { error: err.message }));
+  running = dispatchDueJobs(prisma, sender, new Date(), log)
+    .catch((err: Error) => log('dispatch failed', { error: err.message }))
+    .then(async () => {
+      // Data retention runs hourly alongside notifications.
+      if (Date.now() - lastRetention < RETENTION_EVERY_MS) return;
+      lastRetention = Date.now();
+      const purged = await purgeDeletedAccounts(prisma);
+      const pruned = await pruneOldEvents(prisma);
+      log('retention run', { purgedAccounts: purged, ...pruned });
+    })
+    .catch((err: Error) => log('retention failed', { error: err.message }));
   await running;
   running = null;
   if (!stopping) setTimeout(tick, config.POLL_INTERVAL_SECONDS * 1000);
