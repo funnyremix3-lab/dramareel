@@ -99,19 +99,25 @@ jobs:
 
   admin:
     runs-on: ubuntu-latest
-    if: hashFiles('apps/admin/package.json') != ''
     defaults:
       run:
         working-directory: apps/admin
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      # hashFiles() is not allowed in job-level `if`; gate each step instead.
+      - if: hashFiles('apps/admin/package.json') != ''
+        uses: actions/setup-node@v4
         with: { node-version: '${{ env.NODE_VERSION }}', cache: npm, cache-dependency-path: apps/admin/package-lock.json }
-      - run: npm ci
-      - run: npm run typecheck
-      - run: npm run lint
-      - run: npm test
-      - run: npm run build
+      - if: hashFiles('apps/admin/package.json') != ''
+        run: npm ci
+      - if: hashFiles('apps/admin/package.json') != ''
+        run: npm run typecheck
+      - if: hashFiles('apps/admin/package.json') != ''
+        run: npm run lint
+      - if: hashFiles('apps/admin/package.json') != ''
+        run: npm test
+      - if: hashFiles('apps/admin/package.json') != ''
+        run: npm run build
 
   docker:
     runs-on: ubuntu-latest
