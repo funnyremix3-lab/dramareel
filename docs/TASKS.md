@@ -24,7 +24,8 @@ Add newly discovered work at the right place instead of doing it silently.
 - [x] Ads: consent (UMP), init, rewarded flow with SSV polling, interstitial frequency policy
 - [x] Payments: react-native-iap purchase flow → server verify
 - [x] Push token registration (expo-notifications, FCM)
-- [x] Sentry init (DSN optional), consent-gated analytics shim
+- [x] Sentry init (DSN optional)
+- [ ] Consent-gated product analytics (client events → API → admin reports)
 - [x] Jest tests: logic, api client, i18n parity, key components; Maestro e2e flow file
 - [x] `expo export` bundles for Android; expo-doctor 20/20
 - [ ] Native Android build (expo run:android / EAS) and on-device run — needs Android SDK+JDK or an Expo account
