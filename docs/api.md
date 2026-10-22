@@ -139,10 +139,12 @@ Every write goes to `audit_logs` with before and after values. Permissions are l
 | Access control | `GET/POST/PATCH /admin/roles`, `PUT /admin/users/{id}/roles`. `[roles:write]` (Owner only) |
 | Audit | `GET /admin/audit-logs?actor=&entityType=&entityId=&from=&to=`. `[audit:read]` |
 
+Implemented routes are listed in Swagger (`/api/docs`, tag `admin: *`). Pricing fields (episode access/unlock coins, free episode count, default unlock coins) additionally require `monetization:write`. Campaign status moves DRAFT→SCHEDULED/ACTIVE→PAUSED→COMPLETED/CANCELED; activation needs an approved creative. Products: `GET/PUT /admin/products` (`monetization:write`).
+
 ### Default role permissions
 | Role | Permissions |
 |---|---|
 | OWNER | `*` |
-| CONTENT_MANAGER | `dramas:*`, `media:write`, `monetization:write`, `moderation:write`, `analytics:read`, `notifications:write` |
+| CONTENT_MANAGER | `dramas:*` (read/write/publish), `media:write`, `monetization:write`, `moderation:write`, `analytics:read`, `notifications:write` |
 | ADS_MANAGER | `ads:*`, `analytics:read` |
-| SUPPORT_AGENT | `users:read`, `users:write` (suspend/reinstate only), `moderation:write`, `audit:read` |
+| SUPPORT_AGENT | `users:read`, `users:suspend`, `moderation:write`, `audit:read` |

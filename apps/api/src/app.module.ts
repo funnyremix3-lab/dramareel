@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
+import { AdminModule } from './admin/admin.module';
 import { AdsModule } from './ads/ads.module';
 import { AuthGuard } from './auth/auth.guard';
 import { AuthModule } from './auth/auth.module';
@@ -59,6 +60,7 @@ const env = loadEnv();
     WalletModule,
     AdsModule,
     PaymentsModule,
+    AdminModule,
     DevModule.register(),
     HealthModule,
   ],

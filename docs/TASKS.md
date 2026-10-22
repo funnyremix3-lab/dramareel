@@ -31,7 +31,7 @@ Add newly discovered work at the right place instead of doing it silently.
 - [ ] Native Android build (expo run:android / EAS) and on-device run — needs Android SDK+JDK or an Expo account
 
 ## Phase 8 — admin, ops, deployment
-- [ ] API admin endpoints: dramas/episodes CRUD+publish, categories, users, moderation, ad placements/campaigns/creatives, reports CSV, roles, audit log, notifications, overview metrics
+- [x] API admin endpoints: dramas/episodes CRUD+publish, categories, users, moderation, ad placements/campaigns/creatives, reports CSV, roles, audit log, notifications, overview metrics
 - [ ] workers/notifications (FCM HTTP v1, scheduled jobs)
 - [ ] apps/admin (Next.js + Tailwind + TanStack Query + Zod), RBAC route protection
 - [ ] API Dockerfile, compose services for api/workers/admin
