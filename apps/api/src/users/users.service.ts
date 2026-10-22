@@ -3,6 +3,7 @@ import { Prisma, User } from '@prisma/client';
 import { AuthUser, VerifiedClaims } from '../auth/auth.types';
 import { AppException } from '../common/errors/app-exception';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { ENTITLED_SUBSCRIPTION_STATUSES } from '../entitlements/entitlement';
 
 const withRoles = { roles: { include: { role: true } } } satisfies Prisma.UserInclude;
 type UserWithRoles = Prisma.UserGetPayload<{ include: typeof withRoles }>;
@@ -57,7 +58,7 @@ export class UsersService {
       include: { ...withRoles, profile: true, wallet: true },
     });
     const subscription = await this.prisma.subscription.findFirst({
-      where: { userId, status: { in: ['ACTIVE', 'IN_GRACE_PERIOD'] }, currentPeriodEnd: { gt: new Date() } },
+      where: { userId, status: { in: [...ENTITLED_SUBSCRIPTION_STATUSES] }, currentPeriodEnd: { gt: new Date() } },
       include: { product: true },
       orderBy: { currentPeriodEnd: 'desc' },
     });

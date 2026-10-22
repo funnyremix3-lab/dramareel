@@ -1,4 +1,4 @@
-import { EpisodeAccess } from '@prisma/client';
+import { EpisodeAccess, SubscriptionStatus } from '@prisma/client';
 
 export type AccessReason = 'FREE' | 'FREE_PREVIEW' | 'SUBSCRIPTION' | 'UNLOCKED' | 'LOCKED';
 
@@ -29,3 +29,9 @@ export function evaluateAccess(input: EntitlementInput): { allowed: boolean; rea
 export function unlockPrice(episode: { unlockCoins: number | null }, drama: { defaultUnlockCoins: number }): number {
   return episode.unlockCoins ?? drama.defaultUnlockCoins;
 }
+
+/**
+ * Subscription states that still grant access while `current_period_end` is in the future.
+ * CANCELED means auto-renew is off — the user keeps what they paid for until the period ends.
+ */
+export const ENTITLED_SUBSCRIPTION_STATUSES = ['ACTIVE', 'IN_GRACE_PERIOD', 'CANCELED'] as const satisfies readonly SubscriptionStatus[];

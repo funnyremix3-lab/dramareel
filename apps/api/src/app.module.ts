@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
+import { AdsModule } from './ads/ads.module';
 import { AuthGuard } from './auth/auth.guard';
 import { AuthModule } from './auth/auth.module';
 import { CatalogModule } from './catalog/catalog.module';
@@ -12,12 +13,16 @@ import { UserThrottlerGuard } from './common/http/user-throttler.guard';
 import { PrismaModule } from './common/prisma/prisma.service';
 import { ConfigModule } from './config/config.module';
 import { loadEnv } from './config/env';
+import { DevModule } from './dev/dev.module';
 import { EngagementModule } from './engagement/engagement.module';
 import { EntitlementsModule } from './entitlements/entitlements.service';
 import { HealthModule } from './health/health.controller';
 import { MediaModule } from './media/media.module';
+import { PaymentsModule } from './payments/payments.controller';
 import { QueueModule } from './queue/transcode-queue.service';
 import { UsersModule } from './users/users.module';
+import { WalletModule } from './wallet/wallet.module';
+import { WalletCoreModule } from './wallet/wallet.service';
 
 const env = loadEnv();
 
@@ -50,6 +55,11 @@ const env = loadEnv();
     CatalogModule,
     MediaModule.register(),
     EngagementModule,
+    WalletCoreModule,
+    WalletModule,
+    AdsModule,
+    PaymentsModule,
+    DevModule.register(),
     HealthModule,
   ],
   providers: [

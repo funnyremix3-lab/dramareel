@@ -1,7 +1,7 @@
 import { Global, Injectable, Module } from '@nestjs/common';
 import { EpisodeAccess } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
-import { AccessReason, evaluateAccess } from './entitlement';
+import { AccessReason, ENTITLED_SUBSCRIPTION_STATUSES, evaluateAccess } from './entitlement';
 
 interface EpisodeFacts {
   id: string;
@@ -15,7 +15,7 @@ export class EntitlementsService {
 
   async hasActiveSubscription(userId: string, now = new Date()): Promise<boolean> {
     const count = await this.prisma.subscription.count({
-      where: { userId, status: { in: ['ACTIVE', 'IN_GRACE_PERIOD'] }, currentPeriodEnd: { gt: now } },
+      where: { userId, status: { in: [...ENTITLED_SUBSCRIPTION_STATUSES] }, currentPeriodEnd: { gt: now } },
     });
     return count > 0;
   }

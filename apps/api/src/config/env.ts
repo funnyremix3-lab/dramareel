@@ -45,6 +45,22 @@ export const envSchema = z
     PLAYBACK_TOKEN_TTL_SECONDS: z.coerce.number().int().min(60).max(86_400).default(21_600),
     /** Serve /dev-media from the API (local development only). */
     DEV_MEDIA_PROXY: bool.default(false),
+
+    /** Rewarded ads grant only via AdMob server-side verification when true (required in production). */
+    ADMOB_SSV_ENABLED: bool.default(false),
+    ADMOB_SSV_MAX_AGE_SECONDS: z.coerce.number().int().positive().default(6 * 3600),
+    REWARD_CLAIM_TTL_SECONDS: z.coerce.number().int().min(60).max(86_400).default(1800),
+    /** Signs direct-campaign serve tokens (impression/click beacons). 32+ bytes base64. */
+    ADS_SERVE_SIGNING_KEY: optionalString,
+
+    /** Real-money purchases stay off until store verification and compliance are done. */
+    PAYMENTS_ENABLED: bool.default(false),
+    GOOGLE_PLAY_PACKAGE_NAME: z.string().default('com.reeldrama.app'),
+    /** Path to the Play Developer API service-account JSON (never commit it). */
+    GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_PATH: optionalString,
+    /** Pub/Sub push subscription settings for Real-time Developer Notifications. */
+    GOOGLE_RTDN_AUDIENCE: optionalString,
+    GOOGLE_RTDN_SERVICE_ACCOUNT_EMAIL: optionalString,
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production') {
@@ -59,6 +75,15 @@ export const envSchema = z
       }
       if (!env.PLAYBACK_SIGNING_KEY) {
         ctx.addIssue({ code: 'custom', path: ['PLAYBACK_SIGNING_KEY'], message: 'is required in production' });
+      }
+      if (!env.ADMOB_SSV_ENABLED) {
+        ctx.addIssue({ code: 'custom', path: ['ADMOB_SSV_ENABLED'], message: 'must be true in production (rewards need server-side verification)' });
+      }
+      if (!env.ADS_SERVE_SIGNING_KEY) {
+        ctx.addIssue({ code: 'custom', path: ['ADS_SERVE_SIGNING_KEY'], message: 'is required in production' });
+      }
+      if (env.PAYMENTS_ENABLED && (!env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_PATH || !env.GOOGLE_RTDN_AUDIENCE)) {
+        ctx.addIssue({ code: 'custom', path: ['PAYMENTS_ENABLED'], message: 'needs GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_PATH and GOOGLE_RTDN_AUDIENCE' });
       }
     }
     if (env.PLAYBACK_SIGNING_KEY && Buffer.from(env.PLAYBACK_SIGNING_KEY, 'base64').length < 32) {
