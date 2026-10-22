@@ -42,8 +42,13 @@ describe('Media: playback authorization & uploads (e2e)', () => {
   });
 
   describe('GET /episodes/:id/playback', () => {
-    it('requires sign-in', async () => {
-      await http.get(`/api/v1/episodes/${await episodeId(1)}/playback`).expect(401);
+    it('lets anonymous viewers play free episodes but not locked ones', async () => {
+      await readyAsset(1);
+      await readyAsset(9);
+      const free = await http.get(`/api/v1/episodes/${await episodeId(1)}/playback`).expect(200);
+      expect(free.body.resumePositionSeconds).toBe(0);
+      const locked = await http.get(`/api/v1/episodes/${await episodeId(9)}/playback`).expect(403);
+      expect(locked.body.error.code).toBe('EPISODE_LOCKED');
     });
 
     it('returns tokenised HLS URLs for a free episode', async () => {

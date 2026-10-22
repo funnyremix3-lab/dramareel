@@ -34,7 +34,7 @@ export class PlaybackService {
   }
 
   /** Authorises playback of one episode for one user and returns short-lived URLs. */
-  async authorize(userId: string, episodeId: string) {
+  async authorize(userId: string | undefined, episodeId: string) {
     const now = new Date();
     const episode = await this.prisma.episode.findFirst({
       where: {
@@ -73,13 +73,13 @@ export class PlaybackService {
     const token = await signPlaybackToken(this.signingKey, {
       a: asset.id,
       e: expiresAt,
-      u: createHash('sha256').update(userId).digest('hex').slice(0, 10),
+      u: userId ? createHash('sha256').update(userId).digest('hex').slice(0, 10) : 'anon',
     });
     const base = `${this.mediaBase}/p/${token}/${asset.id}`;
     const masterFile = asset.hlsMasterKey.slice(`processed/${asset.id}/`.length);
 
     const [history, subtitles] = await Promise.all([
-      this.prisma.watchHistory.findUnique({ where: { userId_episodeId: { userId, episodeId } } }),
+      userId ? this.prisma.watchHistory.findUnique({ where: { userId_episodeId: { userId, episodeId } } }) : null,
       Promise.all(
         episode.subtitles.map(async (s) => ({
           language: s.languageCode,
