@@ -1,0 +1,31 @@
+# Upstream BytePlus clone, kept only as read-only reference
+/VideoOneSolutions/
+
+# Dependencies & builds
+node_modules/
+dist/
+build/
+.next/
+.expo/
+.turbo/
+coverage/
+*.tsbuildinfo
+
+# Env & secrets — never commit
+.env
+.env.*
+!.env.example
+*.keystore
+!apps/mobile/android/app/debug.keystore
+*.jks
+*.p8
+*.p12
+*.pem
+google-services.json
+GoogleService-Info.plist
+service-account*.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log
