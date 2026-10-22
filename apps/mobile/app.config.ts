@@ -62,7 +62,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ['react-native-video', { enableNotificationControls: false, androidExtensions: { useExoplayerHls: true, useExoplayerDash: false, useExoplayerSmoothStreaming: false, useExoplayerRtsp: false } }],
     'expo-secure-store',
     'expo-localization',
-    ['expo-build-properties', { android: { targetSdkVersion: 36, compileSdkVersion: 36 } }],
+    // Cleartext HTTP only for non-production builds (local API on the LAN); production is HTTPS-only.
+    ['expo-build-properties', { android: { targetSdkVersion: 36, compileSdkVersion: 36, usesCleartextTraffic: !isProduction } }],
     [
       'react-native-google-mobile-ads',
       {
