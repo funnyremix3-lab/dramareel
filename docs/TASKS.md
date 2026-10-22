@@ -15,18 +15,19 @@ Add newly discovered work at the right place instead of doing it silently.
 - [x] Scaffold SDK 58 app, config, deps, BytePlus assets
 - [x] API client, types, i18n (en/hi), Supabase + dev auth, query client, UI primitives
 - [x] Player core: VideoSurface adapter (react-native-video), logic, prefs, hooks
-- [ ] Root layout + providers, tabs (For You, Discover, My List, Profile)
-- [ ] Episode pager (vertical swipe, ≤3 mounted players, pause on blur/background, FLAG_SECURE)
-- [ ] Player overlay: like (Lottie), comments, episode selector, quality/speed sheets, progress bar
-- [ ] Locked slide + unlock sheet (coins / rewarded ad / VIP)
-- [ ] Discover: featured carousel, rails, categories, search, sponsored card
-- [ ] Drama detail, category list, My List, Profile, wallet, VIP, settings, licences, sign-in
-- [ ] Ads: consent (UMP), init, rewarded flow with SSV polling, interstitial frequency policy
-- [ ] Payments: react-native-iap purchase flow → server verify
-- [ ] Push token registration (expo-notifications, FCM)
-- [ ] Sentry init (DSN optional), consent-gated analytics shim
-- [ ] Jest tests: logic, api client, i18n parity, key components; Maestro e2e flow file
-- [ ] `expo export` bundles for Android; prebuild sanity
+- [x] Root layout + providers, tabs (For You, Discover, My List, Profile)
+- [x] Episode pager (vertical swipe, ≤3 mounted players, pause on blur/background, FLAG_SECURE)
+- [x] Player overlay: like (Lottie), comments, episode selector, quality/speed sheets, progress bar
+- [x] Locked slide + unlock sheet (coins / rewarded ad / VIP)
+- [x] Discover: featured carousel, rails, categories, search, sponsored card
+- [x] Drama detail, category list, My List, Profile, wallet, VIP, settings, licences, sign-in
+- [x] Ads: consent (UMP), init, rewarded flow with SSV polling, interstitial frequency policy
+- [x] Payments: react-native-iap purchase flow → server verify
+- [x] Push token registration (expo-notifications, FCM)
+- [x] Sentry init (DSN optional), consent-gated analytics shim
+- [x] Jest tests: logic, api client, i18n parity, key components; Maestro e2e flow file
+- [x] `expo export` bundles for Android; expo-doctor 20/20
+- [ ] Native Android build (expo run:android / EAS) and on-device run — needs Android SDK+JDK or an Expo account
 
 ## Phase 8 — admin, ops, deployment
 - [ ] API admin endpoints: dramas/episodes CRUD+publish, categories, users, moderation, ad placements/campaigns/creatives, reports CSV, roles, audit log, notifications, overview metrics

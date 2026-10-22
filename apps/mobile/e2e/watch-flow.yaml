@@ -1,0 +1,44 @@
+# Maestro end-to-end flow (https://maestro.mobile.dev). Requires a development build with
+# EXPO_PUBLIC_DEV_LOGIN=true, the API running with seed data + sample media.
+#   maestro test e2e/watch-flow.yaml
+appId: com.reeldrama.app.development
+---
+- launchApp:
+    clearState: true
+# 1. Sign in with the seeded viewer account
+- tapOn: "Profile"
+- tapOn:
+    id: "profile-sign-in"
+- tapOn:
+    id: "dev-login-viewer"
+- assertVisible:
+    id: "profile-name"
+# 2. Open a drama from Discover
+- tapOn: "Discover"
+- tapOn:
+    id: "featured-billionaires-secret-bride"
+- assertVisible:
+    id: "drama-title"
+# 3. Play episode 1
+- tapOn:
+    id: "play-drama"
+- assertVisible:
+    id: "episode-pager"
+- extendedWaitUntil:
+    visible:
+      id: "video-1"
+    timeout: 15000
+# 4. Swipe to the next episode
+- swipe:
+    direction: UP
+- extendedWaitUntil:
+    visible:
+      id: "video-2"
+    timeout: 15000
+# 5. Episode 6+ is locked for a new viewer
+- tapOn:
+    id: "open-episodes"
+- tapOn:
+    id: "episode-cell-6"
+- assertVisible:
+    id: "locked-state"
