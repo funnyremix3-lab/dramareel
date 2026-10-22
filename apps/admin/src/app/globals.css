@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+/* Design tokens: used as bg-surface, text-ink, border-line, text-muted, bg-subtle, bg-brand-600 … */
+@theme {
+  --color-ink: #111827;
+  --color-muted: #5b6472;
+  --color-line: #e3e6eb;
+  --color-surface: #ffffff;
+  --color-subtle: #f4f5f7;
+  --color-canvas: #f8f9fb;
+  --color-brand-50: #fff1f3;
+  --color-brand-500: #e11d48;
+  --color-brand-600: #c8153d;
+  --color-brand-700: #a3102f;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Noto Sans Devanagari", sans-serif;
+}
+
+html,
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+}
+
+:focus-visible {
+  outline-color: var(--color-brand-500);
+}
