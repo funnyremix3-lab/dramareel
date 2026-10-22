@@ -1,0 +1,38 @@
+# Local development services. NOT a production setup (no TLS, default credentials).
+#   docker compose -f infra/docker/docker-compose.yml up -d
+name: reel-drama
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: reeldrama
+      POSTGRES_PASSWORD: reeldrama
+      POSTGRES_DB: reeldrama
+    ports: ["54329:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data, ./init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql:ro]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reeldrama"]
+      interval: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports: ["63799:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      retries: 20
+
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: reeldrama
+      MINIO_ROOT_PASSWORD: reeldrama-secret
+    ports: ["9000:9000", "9001:9001"]
+    volumes: [miniodata:/data]
+
+volumes:
+  pgdata:
+  miniodata:
