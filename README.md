@@ -1,34 +1,65 @@
 # Reel Drama
 
-Short-drama streaming platform: vertical episodes, free plus premium unlocks, rewarded ads, coins and subscriptions. Android first, iOS-compatible, Hindi and English.
+Short-drama streaming platform: vertical episodes, free and premium unlocks, rewarded ads, coins, VIP subscriptions, and direct advertiser campaigns. Android first, iOS-compatible, Hindi and English.
 
-| Path | What | Status |
+| Path | What | Tech |
 |---|---|---|
-| `apps/mobile` | Expo / React Native app, imported from BytePlus VideoOne (Apache-2.0) | Imported unmodified; migration in Phase 4 |
-| `apps/api` | NestJS + Prisma + PostgreSQL API | Schema designed (`prisma/schema.prisma`); code in Phase 3 |
-| `apps/admin` | Next.js admin dashboard | Phase 8 |
-| `workers/video-transcoder` | FFmpeg → HLS worker | Phase 5 |
-| `workers/notifications` | FCM push worker | Phase 8 |
-| `packages/*` | Shared types, Zod schemas, config | Phase 3 |
-| `infra/` | Docker Compose, Cloudflare media worker, deployment | Phases 3, 5, 8 |
-| `docs/` | Architecture, database, API contract | Phase 2 ✅ |
-| `VideoOneSolutions/` | Upstream BytePlus clone, read-only reference, git-ignored | — |
+| [`apps/api`](apps/api) | REST API `/api/v1` and Swagger | NestJS 11, Prisma 6, PostgreSQL, Redis/BullMQ |
+| [`apps/mobile`](apps/mobile) | Viewer app (UI derived from BytePlus VideoOne, Apache-2.0) | Expo SDK 58, React Native 0.88, react-native-video |
+| [`apps/admin`](apps/admin) | Admin dashboard (content, ads, users, moderation, reports) | Next.js, Tailwind, TanStack Query |
+| [`workers/video-transcoder`](workers/video-transcoder) | Upload → HLS 480/720/1080p, thumbnails | Node + FFmpeg, BullMQ |
+| [`workers/notifications`](workers/notifications) | Scheduled push notifications | FCM HTTP v1 |
+| [`infra/cloudflare/media-worker`](infra/cloudflare/media-worker) | Token-checked HLS delivery from private R2 | Cloudflare Workers |
+| [`infra/docker`](infra/docker) | Local Postgres, Redis, S3 (SeaweedFS); opt-in app profile | Docker Compose |
+| [`docs`](docs) | Architecture, database, API, video pipeline, ads, deployment, task queue | |
 
-Start here: [docs/architecture.md](docs/architecture.md), then [docs/database.md](docs/database.md) and [docs/api.md](docs/api.md).
+## Quick start (local)
+```bash
+docker compose -f infra/docker/docker-compose.yml up -d          # Postgres :54329, Redis :63799, S3 :9000
+
+cd apps/api && cp .env.example .env    # point DATABASE_URL at local or Supabase; set secrets
+npm install && npm run db:migrate:deploy && npm run db:seed && npm run dev   # http://localhost:3000/api/docs
+
+cd workers/video-transcoder && cp .env.example .env && npm install
+npm run seed:media                     # synthetic sample videos for every seeded episode (dev only)
+npm run dev                            # processes admin uploads
+
+cd apps/admin && cp .env.example .env.local && npm install && npm run dev    # http://localhost:3001
+cd apps/mobile && cp .env.example .env.local && npm install && npx expo run:android
+```
+Dev sign-in without Supabase: seeded accounts `owner`, `content`, `ads`, `support` and `viewer` (`npm run dev:token -- viewer` in `apps/api`, or the dev buttons in the app and admin). These are disabled in production.
+
+## Quality gates
+`bash scripts/verify.sh` runs typecheck, lint and the unit and integration tests for every package. CI (`.github/workflows/ci.yml`) runs the same checks plus Docker image builds.
+Test counts at the last full run:
+- API: 101 unit and 101 integration tests
+- Transcoder: 19
+- Notifications: 10
+- Media worker: 8
+- Mobile: 26
+
+## Key design points
+- **Server-authoritative economy.** Coins go through an append-only ledger with row locks and idempotency keys. Rewarded ads are granted only after AdMob server-side verification. Play purchases are verified with Google before fulfilment.
+- **Private video.** Originals are never served. HLS goes through path-scoped HMAC tokens checked at the edge. This is access control, not DRM.
+- **Ads.** AdMob uses test units in development; interstitials are frequency-capped; direct campaigns carry signed serve tokens and are always labelled "Sponsored". Network and direct revenue are never mixed.
+- **Privacy.** Analytics are allow-listed and consent-gated. Users can delete their account. Secrets live only in git-ignored `.env` files.
+
+See [docs/architecture.md](docs/architecture.md) and [docs/deployment.md](docs/deployment.md).
 
 ## Git
-- `main`: active development.
-- `backup/byteplus-original` and tag `byteplus-import`: the untouched BytePlus import, to restore from if needed.
+- `main`: development.
+- `backup/byteplus-original` and tag `byteplus-import`: the untouched BytePlus import.
+- `VideoOneSolutions/`: the upstream clone, kept for reference only and git-ignored.
 
-## Prerequisites
-- Node.js 20+ (tested with 24) and npm.
-- Docker Desktop, for Postgres, Redis and MinIO in local development.
-- Android Studio with JDK 17 and the Android SDK, for building the mobile app. Not installed yet on the dev machine.
-- FFmpeg, for the transcoder worker in local runs.
-
-## Known issues inherited from upstream
-- `apps/mobile/package-lock.json` points to an internal ByteDance registry (`bnpm.byted.org`), so `npm ci` fails. It is regenerated in Phase 4.
-- `apps/mobile` has 2 TypeScript errors upstream, in `VideoPlayer.tsx:367` and `dramaUtils.ts:119`. Both files are replaced in Phase 4.
+## What still needs your accounts
+| Needed for | What to provide |
+|---|---|
+| Real sign-in | Supabase anon key (and enable email OTP) |
+| Production video | Cloudflare R2 bucket + API token, Worker deployment |
+| Ads revenue | AdMob app and ad unit IDs, SSV callback URL, `app-ads.txt` |
+| Purchases | Play Console products, service account, RTDN Pub/Sub |
+| Push | Firebase project: `google-services.json` and a service account |
+| Store release | Play Console developer account, upload keystore or EAS |
 
 ## Licence
-Code derived from BytePlus VideoOne is Apache-2.0 (© 2023 BytePlus Pte. Ltd.). See `apps/mobile/LICENSE`. Its copyright headers are kept, and modified files are marked. The BytePlus player SDK is **not** used.
+Code derived from BytePlus VideoOne is Apache-2.0 (© 2023 BytePlus Pte. Ltd.). Attribution is kept in the source headers and on the in-app licences screen. The BytePlus player SDK is not used.
