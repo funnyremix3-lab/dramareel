@@ -63,7 +63,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     'expo-secure-store',
     'expo-localization',
     // Cleartext HTTP only for non-production builds (local API on the LAN); production is HTTPS-only.
-    ['expo-build-properties', { android: { targetSdkVersion: 36, compileSdkVersion: 36, usesCleartextTraffic: !isProduction } }],
+    // SDK versions come from Expo's defaults (SDK 58 needs compileSdk >= 37, which also satisfies Play's target API rule).
+    ['expo-build-properties', { android: { usesCleartextTraffic: !isProduction } }],
     [
       'react-native-google-mobile-ads',
       {

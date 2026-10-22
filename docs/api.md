@@ -128,8 +128,8 @@ Every write goes to `audit_logs` with before and after values. Permissions are l
 | Episodes | `GET/POST /admin/dramas/{id}/episodes` (single season 1 is created automatically), `PATCH/DELETE /admin/episodes/{id}`, `POST /admin/episodes/{id}/publish|unpublish`. `[dramas:write]`; reordering and multi-season management are not implemented yet. |
 | Video | `POST /admin/episodes/{id}/video-assets` (presigned upload), `POST /admin/video-assets/{id}/complete|retry`, `GET /admin/video-assets?status=&episodeId=`, `GET /admin/video-assets/{id}`, `PUT /admin/episodes/{id}/current-asset`. `[media:write]` |
 | Subtitles | `GET /admin/episodes/{id}/subtitles`, `POST /admin/episodes/{id}/subtitles/upload-url` → PUT the .vtt → `POST /admin/episodes/{id}/subtitles` (verifies WEBVTT, creates the row), `DELETE /admin/subtitles/{id}`. `[media:write]` |
-| Taxonomy | CRUD `/admin/categories`, `/admin/languages`. `[dramas:write]` |
-| Monetisation | `PATCH /admin/episodes/{id}/access` (FREE/PREMIUM, coins), `PATCH /admin/dramas/{id}/pricing`, CRUD `/admin/products`. `[monetization:write]` |
+| Taxonomy | `GET/PUT /admin/categories` (upsert by slug, names {en, hi}), `GET/PUT /admin/languages` (upsert by code). `[dramas:read/write]` |
+| Monetisation | Pricing fields on `PATCH /admin/episodes/{id}` (access, unlockCoins) and `PATCH /admin/dramas/{id}` (freeEpisodeCount, defaultUnlockCoins) additionally need `monetization:write`; products via `GET/PUT /admin/products`. |
 | Users | `GET /admin/users?q=`, `GET /admin/users/{id}` (profile, wallet, unlocks, payments), `POST /admin/users/{id}/suspend\|reinstate`, `POST /admin/users/{id}/wallet-adjustments { amount, note }`. `[users:read/write]`, `[wallet:adjust]` (Owner only) |
 | Moderation | `GET /admin/moderation/comments?status=&reported=true`, `POST /admin/comments/{id}/hide\|restore\|delete`, `POST /admin/reports/{id}/resolve`. `[moderation:write]` |
 | Ad config | `GET /admin/ads/placements`, `PATCH /admin/ads/placements/{key}`, `PUT /admin/ads/placements/{key}/configurations`, `GET /admin/ads/network-reports?from=&to=`, `POST /admin/ads/network-reports/import`. `[ads:read/write]` |
