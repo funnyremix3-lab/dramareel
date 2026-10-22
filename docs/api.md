@@ -124,17 +124,17 @@ Every write goes to `audit_logs` with before and after values. Permissions are l
 | Area | Endpoints |
 |---|---|
 | Dashboard | `GET /admin/overview`: DAU, plays, unlocks, coins issued and spent, reward claims, top dramas. `[analytics:read]` |
-| Dramas | `GET/POST /admin/dramas`, `GET/PATCH/DELETE /admin/dramas/{id}`, `POST /admin/dramas/{id}/publish\|unpublish`, `PUT /admin/dramas/{id}/translations/{lang}`, `POST /admin/dramas/{id}/poster-upload-url`. `[dramas:read/write/publish]` |
-| Seasons & episodes | `POST /admin/dramas/{id}/seasons`, `GET/POST /admin/dramas/{id}/episodes`, `PATCH/DELETE /admin/episodes/{id}`, `POST /admin/episodes/{id}/publish`, `PUT /admin/episodes/reorder`. `[dramas:write]` |
-| Video | `POST /admin/episodes/{id}/video-assets` returns a presigned upload. `POST /admin/video-assets/{id}/complete`, `POST /admin/video-assets/{id}/retry`, `GET /admin/video-assets?status=`, `PUT /admin/episodes/{id}/current-asset`. `[media:write]` |
-| Subtitles | `POST /admin/episodes/{id}/subtitles` (presigned VTT upload), `DELETE /admin/subtitles/{id}`. `[media:write]` |
+| Dramas | `GET/POST /admin/dramas`, `GET/PATCH/DELETE /admin/dramas/{id}`, `POST /admin/dramas/{id}/publish|unpublish|archive`, `PUT /admin/dramas/{id}/translations/{lang}`, `POST /admin/dramas/{id}/poster-upload-url`. `[dramas:read/write/publish]` |
+| Episodes | `GET/POST /admin/dramas/{id}/episodes` (single season 1 is created automatically), `PATCH/DELETE /admin/episodes/{id}`, `POST /admin/episodes/{id}/publish|unpublish`. `[dramas:write]`; reordering and multi-season management are not implemented yet. |
+| Video | `POST /admin/episodes/{id}/video-assets` (presigned upload), `POST /admin/video-assets/{id}/complete|retry`, `GET /admin/video-assets?status=&episodeId=`, `GET /admin/video-assets/{id}`, `PUT /admin/episodes/{id}/current-asset`. `[media:write]` |
+| Subtitles | `GET /admin/episodes/{id}/subtitles`, `POST /admin/episodes/{id}/subtitles/upload-url` → PUT the .vtt → `POST /admin/episodes/{id}/subtitles` (verifies WEBVTT, creates the row), `DELETE /admin/subtitles/{id}`. `[media:write]` |
 | Taxonomy | CRUD `/admin/categories`, `/admin/languages`. `[dramas:write]` |
 | Monetisation | `PATCH /admin/episodes/{id}/access` (FREE/PREMIUM, coins), `PATCH /admin/dramas/{id}/pricing`, CRUD `/admin/products`. `[monetization:write]` |
 | Users | `GET /admin/users?q=`, `GET /admin/users/{id}` (profile, wallet, unlocks, payments), `POST /admin/users/{id}/suspend\|reinstate`, `POST /admin/users/{id}/wallet-adjustments { amount, note }`. `[users:read/write]`, `[wallet:adjust]` (Owner only) |
 | Moderation | `GET /admin/moderation/comments?status=&reported=true`, `POST /admin/comments/{id}/hide\|restore\|delete`, `POST /admin/reports/{id}/resolve`. `[moderation:write]` |
-| Ad config | CRUD `/admin/ads/placements`, `/admin/ads/configurations`, `GET /admin/ads/network-reports`, `POST /admin/ads/network-reports/import`. `[ads:write]` |
-| Campaigns | CRUD `/admin/ads/campaigns`, `POST /admin/ads/campaigns/{id}/activate\|pause`, `POST /admin/ads/campaigns/{id}/creatives` (presigned upload), `POST /admin/ads/creatives/{id}/review`, `GET /admin/ads/campaigns/{id}/report?from=&to=`. `[ads:write]` |
-| Notifications | CRUD `/admin/notifications`, `POST /admin/notifications/{id}/schedule\|cancel\|test`. `[notifications:write]` |
+| Ad config | `GET /admin/ads/placements`, `PATCH /admin/ads/placements/{key}`, `PUT /admin/ads/placements/{key}/configurations`, `GET /admin/ads/network-reports?from=&to=`, `POST /admin/ads/network-reports/import`. `[ads:read/write]` |
+| Campaigns | `GET/POST /admin/ads/campaigns`, `GET/PUT /admin/ads/campaigns/{id}`, `POST /admin/ads/campaigns/{id}/schedule|activate|pause|complete|cancel`, `POST /admin/ads/campaigns/{id}/creative-upload-url` → PUT image → `POST /admin/ads/campaigns/{id}/creatives`, `POST /admin/ads/creatives/{id}/review` (not by the campaign creator unless owner), `GET /admin/ads/campaigns/{id}/report?from=&to=`. `[ads:read/write]` |
+| Notifications | `GET/POST /admin/notifications`, `POST /admin/notifications/{id}/schedule|cancel`. Sending is done by `workers/notifications`. `[notifications:write]` |
 | Reports | `GET /admin/reports/{kind}.csv?from=&to=` for plays, revenue-direct, revenue-network, rewards and users. `[analytics:read]` |
 | Access control | `GET/POST/PATCH /admin/roles`, `PUT /admin/users/{id}/roles`. `[roles:write]` (Owner only) |
 | Audit | `GET /admin/audit-logs?actor=&entityType=&entityId=&from=&to=`. `[audit:read]` |
