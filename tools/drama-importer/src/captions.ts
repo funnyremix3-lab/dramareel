@@ -87,17 +87,47 @@ export function dedupeRollingCues(cues: Cue[]): Cue[] {
 }
 
 /**
+ * Groups word cues into readable subtitle lines: a line ends at a sentence end, a pause, or when
+ * it would exceed `maxChars` characters or `maxSeconds` on screen.
+ */
+export function wordsToLines(words: Cue[], maxChars = 42, maxSeconds = 4, pause = 0.6): Cue[] {
+  const lines: Cue[] = [];
+  let current: Cue | null = null;
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i];
+    if (current && (current.text.length + 1 + w.text.length > maxChars || w.end - current.start > maxSeconds)) {
+      lines.push(current);
+      current = null;
+    }
+    current = current ? { start: current.start, end: w.end, text: `${current.text} ${w.text}` } : { ...w };
+    const next = words[i + 1];
+    if (!next || /[.!?।]["')\]]?$/.test(w.text) || next.start - w.end >= pause) {
+      lines.push(current);
+      current = null;
+    }
+  }
+  // Keep each line on screen a little longer when the next one starts later.
+  for (let i = 0; i < lines.length; i++) {
+    const nextStart = lines[i + 1]?.start ?? Infinity;
+    lines[i].end = Math.min(Math.max(lines[i].end, lines[i].start + 1), lines[i].end + 0.6, nextStart);
+  }
+  return lines;
+}
+
+/**
  * Points where speech pauses: the gap between consecutive words. A gap after sentence-ending
  * punctuation counts double, so cuts land between sentences rather than between phrases.
  */
-export function speechPauses(words: Cue[], minGap = 0.35): { at: number; gap: number }[] {
+export function speechPauses(words: Cue[], minGap = 0.35, maxWord = 0.7): { at: number; gap: number }[] {
   const pauses: { at: number; gap: number }[] = [];
   for (let i = 0; i < words.length - 1; i++) {
-    const gap = words[i + 1].start - words[i].end;
+    // Auto-captions stretch each word until the next one starts, which hides pauses; a spoken
+    // word rarely lasts longer than maxWord, so anything beyond that is silence.
+    const end = Math.min(words[i].end, words[i].start + maxWord);
+    const gap = Math.max(0, words[i + 1].start - end);
     const sentenceEnd = /[.!?।]["')\]]?$/.test(words[i].text);
-    if (gap >= minGap || (sentenceEnd && gap >= 0.1)) {
-      pauses.push({ at: words[i].end + gap / 2, gap: sentenceEnd ? gap * 2 + 0.5 : gap });
-    }
+    if (sentenceEnd) pauses.push({ at: end + gap / 2, gap: gap * 2 + 0.5 });
+    else if (gap >= minGap) pauses.push({ at: end + gap / 2, gap });
   }
   return pauses;
 }

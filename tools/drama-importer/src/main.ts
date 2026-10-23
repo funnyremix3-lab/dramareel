@@ -4,7 +4,7 @@
  *   npm run import -- plan    --video src.mp4 --captions src.en-orig.json3 --out work/
  *   npm run import -- import  --video src.mp4 --captions … --subs en=src.en.vtt,hi=src.hi.vtt \
  *                              --title "…" --slug my-drama --out work/ [--categories romance,family]
- *   npm run import -- publish --out work/
+ *   npm run import -- publish --out work/ [--watch]   # publish each episode as soon as it is transcoded
  *
  * Cuts land on pauses between sentences (caption word gaps confirmed by audio silence) as close
  * as possible to --target seconds (default 200 = 3:20). `import` is resumable: progress is kept in
@@ -13,10 +13,10 @@
  */
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { AdminApi } from './api';
-import { parseJson3, parseVtt, dedupeRollingCues, speechPauses, type Cue } from './captions';
+import { dedupeRollingCues, parseJson3, parseVtt, speechPauses, wordsToLines, type Cue } from './captions';
 import { formatTime, mergeBoundaries, parseSilences, planEpisodes, type Segment } from './plan';
 import { sliceCues, toVtt } from './vtt';
 
@@ -145,22 +145,13 @@ async function importDrama(args: Args) {
   }
   printPlan(state.segments);
 
-  // 1. Clips and per-episode subtitles (local, resumable).
+  // Subtitle sources, sliced per episode below.
   const subs = parseSubs(typeof args.subs === 'string' ? args.subs : undefined);
   const subCues = new Map<string, Cue[]>();
-  for (const s of subs) subCues.set(s.lang, dedupeRollingCues(parseVtt(await readFile(s.file, 'utf8'))));
-  for (const seg of state.segments) {
-    const clip = join(out, `ep${String(seg.number).padStart(2, '0')}.mp4`);
-    if (!existsSync(clip)) {
-      const t0 = Date.now();
-      await cutClip(video, seg, clip + '.part.mp4');
-      await import('node:fs/promises').then((fs) => fs.rename(clip + '.part.mp4', clip));
-      console.log(`cut EP${seg.number} in ${Math.round((Date.now() - t0) / 1000)}s`);
-    }
-    for (const [lang, cues] of subCues) {
-      const vtt = join(out, `ep${String(seg.number).padStart(2, '0')}.${lang}.vtt`);
-      if (!existsSync(vtt)) await writeFile(vtt, toVtt(sliceCues(cues, seg.start, seg.end)), 'utf8');
-    }
+  for (const s of subs) {
+    const raw = await readFile(s.file, 'utf8');
+    // A .json3 caption file is turned into subtitle lines; a .vtt file is used as is.
+    subCues.set(s.lang, s.file.endsWith('.json3') ? wordsToLines(parseJson3(raw)) : dedupeRollingCues(parseVtt(raw)));
   }
   const poster = join(out, 'poster.jpg');
   if (!existsSync(poster)) {
@@ -168,7 +159,7 @@ async function importDrama(args: Args) {
     await exec(FFMPEG, ['-hide_banner', '-loglevel', 'error', '-y', '-ss', String(at), '-i', video, '-frames:v', '1', '-vf', 'scale=720:-2', '-q:v', '3', poster]);
   }
 
-  // 2. Drama, episodes and uploads through the Admin API (resumable).
+  // Drama and poster first, so the app can show it as soon as episode 1 is ready.
   const client = await api(args);
   if (!state.dramaId) {
     const drama = await client.createDrama({
@@ -190,12 +181,25 @@ async function importDrama(args: Args) {
     await client.updateDrama(state.dramaId, { posterKey: state.posterKey, coverKey: state.posterKey });
     await saveState(out, state);
   }
+
+  // One episode at a time: cut → subtitles → create → upload, so transcoding starts immediately.
   for (const seg of state.segments) {
     const tag = String(seg.number).padStart(2, '0');
+    const clip = join(out, `ep${tag}.mp4`);
+    if (!existsSync(clip)) {
+      const t0 = Date.now();
+      await cutClip(video, seg, clip + '.part.mp4');
+      await rename(clip + '.part.mp4', clip);
+      console.log(`cut EP${seg.number} in ${Math.round((Date.now() - t0) / 1000)}s`);
+    }
+    for (const [lang, cues] of subCues) {
+      const vtt = join(out, `ep${tag}.${lang}.vtt`);
+      if (!existsSync(vtt)) await writeFile(vtt, toVtt(sliceCues(cues, seg.start, seg.end)), 'utf8');
+    }
     const ep = (state.episodes[seg.number] ??= { id: (await client.createEpisode(state.dramaId, { number: seg.number, title: `Episode ${seg.number}` })).id });
     await saveState(out, state);
     if (!ep.assetId) {
-      ep.assetId = await client.uploadVideo(ep.id, join(out, `ep${tag}.mp4`));
+      ep.assetId = await client.uploadVideo(ep.id, clip);
       await saveState(out, state);
     }
     ep.subs ??= [];
@@ -207,26 +211,47 @@ async function importDrama(args: Args) {
     }
     console.log(`EP${tag} uploaded (asset ${ep.assetId}), transcoding queued`);
   }
-  console.log('import done. When the transcoder has finished, run: npm run import -- publish --out <out>');
+  console.log('import done');
 }
 
+/**
+ * Publishes each episode as soon as its video is READY (and the drama with the first one).
+ * With --watch it keeps polling until every planned episode is uploaded and published.
+ */
 async function publish(args: Args) {
   const out = resolve(str(args, 'out'));
-  const state = await loadState(out);
-  if (!state?.dramaId) throw new Error(`no import state in ${out}`);
   const client = await api(args);
+  const published = new Set<number>();
+  let dramaPublished = false;
   for (;;) {
-    const statuses = await Promise.all(Object.values(state.episodes).map((e) => client.videoAsset(e.assetId!)));
-    const failed = statuses.filter((s) => s.status === 'FAILED');
-    if (failed.length) throw new Error(`transcode failed for ${failed.map((f) => f.id).join(', ')}: ${failed[0].lastError ?? ''}`);
-    const ready = statuses.filter((s) => s.status === 'READY').length;
-    console.log(`${ready}/${statuses.length} episodes transcoded`);
-    if (ready === statuses.length) break;
-    await new Promise((r) => setTimeout(r, 30_000));
+    const state = await loadState(out);
+    if (state?.dramaId) {
+      for (const [n, e] of Object.entries(state.episodes)) {
+        const number = Number(n);
+        if (published.has(number) || !e.assetId) continue;
+        const asset = await client.videoAsset(e.assetId);
+        if (asset.status === 'FAILED') throw new Error(`EP${number} transcode failed: ${asset.lastError ?? ''}`);
+        if (asset.status !== 'READY') continue;
+        await client.publishEpisode(e.id);
+        published.add(number);
+        if (!dramaPublished) {
+          await client.publishDrama(state.dramaId);
+          dramaPublished = true;
+          console.log('drama published');
+        }
+        console.log(`EP${number} published (${published.size}/${state.segments.length})`);
+      }
+      if (published.size === state.segments.length) {
+        console.log('all episodes published');
+        return;
+      }
+    }
+    if (!args.watch) {
+      console.log(`${published.size} episode(s) published; run with --watch to keep going`);
+      return;
+    }
+    await new Promise((r) => setTimeout(r, 15_000));
   }
-  for (const e of Object.values(state.episodes)) await client.publishEpisode(e.id).catch((err: Error) => console.warn(err.message));
-  await client.publishDrama(state.dramaId);
-  console.log('drama published');
 }
 
 async function main() {

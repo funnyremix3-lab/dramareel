@@ -1,4 +1,4 @@
-import { dedupeRollingCues, parseJson3, parseVtt, speechPauses } from './captions';
+import { dedupeRollingCues, parseJson3, parseVtt, speechPauses, wordsToLines } from './captions';
 import { formatTime, mergeBoundaries, parseSilences, planEpisodes } from './plan';
 import { sliceCues, toVtt } from './vtt';
 
@@ -58,15 +58,37 @@ describe('captions', () => {
 
   it('finds pauses and boosts sentence ends', () => {
     const pauses = speechPauses([
-      { start: 0, end: 1, text: 'one' },
-      { start: 1.1, end: 2, text: 'done.' },
-      { start: 2.2, end: 3, text: 'next' },
-      { start: 3.6, end: 4, text: 'word' },
+      { start: 0, end: 0.5, text: 'one' },
+      { start: 0.6, end: 1.2, text: 'done.' },
+      { start: 1.4, end: 2, text: 'next' },
+      { start: 2.5, end: 3, text: 'word' },
     ]);
     expect(pauses).toEqual([
-      { at: 2.1, gap: expect.closeTo(0.9, 5) },
-      { at: 3.3, gap: expect.closeTo(0.6, 5) },
+      { at: expect.closeTo(1.3, 5), gap: expect.closeTo(0.9, 5) },
+      { at: expect.closeTo(2.25, 5), gap: expect.closeTo(0.5, 5) },
     ]);
+  });
+
+  it('treats sentence ends as boundaries even when captions leave no gap', () => {
+    const pauses = speechPauses([
+      { start: 0, end: 1, text: 'Stop.' },
+      { start: 1, end: 1.4, text: 'Now' },
+    ]);
+    expect(pauses).toEqual([{ at: expect.closeTo(0.85, 5), gap: expect.closeTo(1.1, 5) }]);
+  });
+
+  it('caps stretched auto-caption words so real pauses show up', () => {
+    expect(speechPauses([{ start: 0, end: 2, text: 'well' }, { start: 2, end: 2.3, text: 'then' }])).toEqual([
+      { at: expect.closeTo(1.35, 5), gap: expect.closeTo(1.3, 5) },
+    ]);
+  });
+
+  it('groups words into subtitle lines at sentence ends, pauses and length limits', () => {
+    const w = (start: number, text: string) => ({ start, end: start + 0.3, text });
+    const lines = wordsToLines([w(0, 'I'), w(0.3, 'know.'), w(0.7, 'Wait'), w(2, 'what'), w(2.3, 'happened')], 42, 4, 0.6);
+    expect(lines.map((l) => l.text)).toEqual(['I know.', 'Wait', 'what happened']);
+    expect(lines[0]).toMatchObject({ start: 0, end: 0.7 });
+    expect(wordsToLines([w(0, 'aaaa'), w(0.3, 'bbbb'), w(0.6, 'cccc')], 9).map((l) => l.text)).toEqual(['aaaa bbbb', 'cccc']);
   });
 
   it('parses VTT and drops rolling-caption repeats', () => {
