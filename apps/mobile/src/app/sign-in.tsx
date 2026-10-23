@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { Linking, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -13,6 +13,8 @@ import { Button, Caption, Title } from '@/ui/primitives';
 import { colors, radius, spacing, type } from '@/ui/theme';
 
 const DEV_ACCOUNTS = ['viewer', 'owner', 'content', 'ads', 'support'] as const;
+// Supabase rejects a new email OTP for the same address within 60 seconds by default.
+const RESEND_COOLDOWN_MS = 60_000;
 
 /** Passwordless email sign-in (Supabase OTP). Dev builds also offer seeded test accounts. */
 export default function SignInScreen() {
@@ -23,7 +25,25 @@ export default function SignInScreen() {
   const [busy, setBusy] = useState(false);
 
   const emailForm = useForm({ resolver: zodResolver(z.object({ email: z.email(t('auth.invalidEmail')) })), defaultValues: { email: '' } });
-  const codeForm = useForm({ resolver: zodResolver(z.object({ code: z.string().regex(/^\d{6}$/, t('auth.invalidCode')) })), defaultValues: { code: '' } });
+  // Supabase email OTP length is a project setting (6–10 digits); accept any of them.
+  const codeForm = useForm({ resolver: zodResolver(z.object({ code: z.string().regex(/^\d{6,10}$/, t('auth.invalidCode')) })), defaultValues: { code: '' } });
+  const [resendAt, setResendAt] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (resendAt <= now) return;
+    const id = setTimeout(() => setNow(Date.now()), 1000);
+    return () => clearTimeout(id);
+  }, [resendAt, now]);
+  const resendIn = Math.max(0, Math.ceil((resendAt - now) / 1000));
+
+  const sendCode = (email: string) =>
+    run(async () => {
+      await auth.sendEmailCode(email);
+      setSentTo(email);
+      codeForm.reset({ code: '' });
+      setResendAt(Date.now() + RESEND_COOLDOWN_MS);
+      setNow(Date.now());
+    });
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -54,12 +74,44 @@ export default function SignInScreen() {
               name="code"
               render={({ field, fieldState }) => (
                 <>
-                  <TextInput testID="otp-input" style={styles.input} keyboardType="number-pad" maxLength={6} placeholder={t('auth.code')} placeholderTextColor={colors.textMuted} value={field.value} onChangeText={field.onChange} autoFocus />
+                  <TextInput
+                    testID="otp-input"
+                    style={styles.input}
+                    keyboardType="number-pad"
+                    textContentType="oneTimeCode"
+                    autoComplete="one-time-code"
+                    maxLength={10}
+                    placeholder={t('auth.code')}
+                    placeholderTextColor={colors.textMuted}
+                    value={field.value}
+                    onChangeText={(v) => field.onChange(v.replace(/\D/g, ''))}
+                    autoFocus
+                  />
                   {fieldState.error ? <Text style={styles.error}>{fieldState.error.message}</Text> : null}
                 </>
               )}
             />
             <Button label={t('auth.verify')} loading={busy} onPress={() => void codeForm.handleSubmit(({ code }) => run(async () => (await auth.verifyEmailCode(sentTo, code), finish())))()} />
+            <View style={styles.devRow}>
+              <Button
+                testID="resend-code"
+                variant="ghost"
+                label={resendIn > 0 ? t('auth.resendIn', { count: resendIn }) : t('auth.resend')}
+                disabled={busy || resendIn > 0}
+                onPress={() => void sendCode(sentTo)}
+              />
+              <Button
+                testID="change-email"
+                variant="ghost"
+                label={t('auth.changeEmail')}
+                disabled={busy}
+                onPress={() => {
+                  setSentTo(null);
+                  setError(null);
+                  codeForm.reset({ code: '' });
+                }}
+              />
+            </View>
           </View>
         ) : (
           <View style={styles.form}>
@@ -73,7 +125,7 @@ export default function SignInScreen() {
                 </>
               )}
             />
-            <Button label={t('auth.sendCode')} loading={busy} onPress={() => void emailForm.handleSubmit(({ email }) => run(async () => (await auth.sendEmailCode(email.trim().toLowerCase()), setSentTo(email.trim().toLowerCase()))))()} />
+            <Button label={t('auth.sendCode')} loading={busy} onPress={() => void emailForm.handleSubmit(({ email }) => sendCode(email.trim().toLowerCase()))()} />
           </View>
         )
       ) : (
