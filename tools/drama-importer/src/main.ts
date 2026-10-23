@@ -133,7 +133,8 @@ const saveState = (out: string, state: State) => writeFile(join(out, 'state.json
 
 async function api(args: Args): Promise<AdminApi> {
   const base = str(args, 'api', process.env.API_URL ?? 'http://localhost:3000/api/v1').replace(/\/$/, '');
-  const token = process.env.ADMIN_TOKEN ?? (await AdminApi.devToken(base, str(args, 'dev-account', 'owner')));
+  // Treat an empty ADMIN_TOKEN as unset so a blank env var falls back to a dev token.
+  const token = process.env.ADMIN_TOKEN?.trim() || (await AdminApi.devToken(base, str(args, 'dev-account', 'owner')));
   return new AdminApi(base, token);
 }
 
