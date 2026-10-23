@@ -26,12 +26,15 @@ cd apps/mobile
 #   EXPO_PUBLIC_API_URL=http://<PC-LAN-IP>:3000/api/v1
 #   EXPO_PUBLIC_DEV_LOGIN=true
 npx expo prebuild --platform android --clean
-cd android && ./gradlew assembleRelease     # signed with the debug key — for testing only
+cd android && ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a   # debug-key signed, testing only
 # → android/app/build/outputs/apk/release/app-release.apk
 ```
 Windows tips:
 - Build from a short path without spaces (e.g. `C:\rd\mobile`). Long paths break CMake.
 - In `android/local.properties`, write `sdk.dir=C:/Android/Sdk` with forward slashes.
+- Expo SDK 58 needs the Android 37 platform (`sdkmanager "platforms/android-37.0"`).
+- The SDK's CMake 3.22.1 ships ninja 1.10, which fails on paths over 260 characters. Replace `<sdk>/cmake/3.22.1/bin/ninja.exe` with ninja 1.12+ (long-path aware) and keep Windows LongPathsEnabled=1.
+- If Gradle cannot download its distribution, download the zip with a browser or curl and point `distributionUrl` at the local file.
 - Set `JAVA_HOME` to JDK 17.
 
 Copy the APK to the phone and install it. You will need to allow "Install unknown apps" for your file manager.

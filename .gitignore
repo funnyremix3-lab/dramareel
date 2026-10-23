@@ -29,3 +29,6 @@ service-account*.json
 .DS_Store
 Thumbs.db
 *.log
+
+# Locally built APKs (never commit binaries)
+/builds/

@@ -32,17 +32,23 @@ Dev sign-in without Supabase: seeded accounts `owner`, `content`, `ads`, `suppor
 ## Quality gates
 `bash scripts/verify.sh` runs typecheck, lint and the unit and integration tests for every package. CI (`.github/workflows/ci.yml`) runs the same checks plus Docker image builds.
 Test counts at the last full run:
-- API: 101 unit and 101 integration tests
+- API: 115 unit and 106 integration tests (including a migration drift check)
+- Admin: 62
+- Mobile: 28
 - Transcoder: 19
-- Notifications: 10
+- Notifications: 12 (including retention against a real database)
 - Media worker: 8
-- Mobile: 26
+
+GitHub Actions runs the same checks on every push: https://github.com/funnyremix3-lab/dramareel/actions
+
+To try the app on a phone over your Wi-Fi, see [docs/phone-testing.md](docs/phone-testing.md).
 
 ## Key design points
 - **Server-authoritative economy.** Coins go through an append-only ledger with row locks and idempotency keys. Rewarded ads are granted only after AdMob server-side verification. Play purchases are verified with Google before fulfilment.
 - **Private video.** Originals are never served. HLS goes through path-scoped HMAC tokens checked at the edge. This is access control, not DRM.
 - **Ads.** AdMob uses test units in development; interstitials are frequency-capped; direct campaigns carry signed serve tokens and are always labelled "Sponsored". Network and direct revenue are never mixed.
-- **Privacy.** Analytics are allow-listed and consent-gated. Users can delete their account. Secrets live only in git-ignored `.env` files.
+- **Privacy.** Analytics are allow-listed and consent-gated. Account deletion has a 30-day grace period, after which a job purges personal data; old analytics and ad events are pruned after about 13 months. Secrets live only in git-ignored `.env` files.
+- **Admin.** Every route is permission-checked on the server. Writes are audit-logged. Ad creatives need a second person to approve them.
 
 See [docs/architecture.md](docs/architecture.md) and [docs/deployment.md](docs/deployment.md).
 

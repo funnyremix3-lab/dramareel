@@ -28,7 +28,8 @@ Add newly discovered work at the right place instead of doing it silently.
 - [x] Consent-gated product analytics (client events → API → admin reports)
 - [x] Jest tests: logic, api client, i18n parity, key components; Maestro e2e flow file
 - [x] `expo export` bundles for Android; expo-doctor 20/20
-- [ ] Native Android build (expo run:android / EAS) and on-device run — needs Android SDK+JDK or an Expo account
+- [x] Native Android build: release APK (arm64, JS bundled) builds locally — see docs/phone-testing.md
+- [ ] On-device run on the user's phone (install builds/reel-drama-dev-arm64.apk) — needs the user
 
 ## Phase 8 — admin, ops, deployment
 - [x] API admin endpoints: dramas/episodes CRUD+publish, categories, users, moderation, ad placements/campaigns/creatives, reports CSV, roles, audit log, notifications, overview metrics
@@ -40,4 +41,4 @@ Add newly discovered work at the right place instead of doing it silently.
 - [x] CI workflow (lint, typecheck, tests)
 - [x] docs/deployment.md (env checklist, migrations, backup/restore, HTTPS, health, monitoring, Android build, store checklist, cost monitoring)
 - [x] Data retention: account-deletion purge after 30 days, cancel on sign-in, prune analytics/ad events > 13 months
-- [ ] Final README pass
+- [x] Final README pass
