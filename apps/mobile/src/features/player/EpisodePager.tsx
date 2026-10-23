@@ -46,7 +46,11 @@ export const EpisodePager = forwardRef<
   const [active, setActive] = useState(initialIndex);
   const [comments, setComments] = useState<Episode | null>(null);
   const [unlock, setUnlock] = useState<Episode | null>(null);
-  const [settings, setSettings] = useState<{ renditions: { name: string; width: number; height: number }[]; current: Quality } | null>(null);
+  const [settings, setSettings] = useState<{
+    renditions: { name: string; width: number; height: number }[];
+    current: Quality;
+    subtitles: { language: string; label: string }[];
+  } | null>(null);
   const overlayOpen = !!(comments || unlock || settings);
 
   const onActiveChangeRef = useRef(onActiveChange);
@@ -103,7 +107,7 @@ export const EpisodePager = forwardRef<
             onUnlock={setUnlock}
             onOpenComments={setComments}
             onOpenEpisodes={onOpenEpisodes}
-            onOpenSettings={(renditions, current) => setSettings({ renditions, current })}
+            onOpenSettings={(renditions, current, subtitles) => setSettings({ renditions, current, subtitles })}
             onWatchFull={item.onWatchFull}
           />
         )}
@@ -122,7 +126,7 @@ export const EpisodePager = forwardRef<
           }}
         />
       ) : null}
-      {settings ? <PlaybackSettingsSheet visible renditions={settings.renditions} current={settings.current} onClose={() => setSettings(null)} /> : null}
+      {settings ? <PlaybackSettingsSheet visible renditions={settings.renditions} current={settings.current} subtitles={settings.subtitles} onClose={() => setSettings(null)} /> : null}
     </View>
   );
 });

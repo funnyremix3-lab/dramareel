@@ -1,11 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import type { Quality } from './logic';
+import type { Quality, SubtitlePref } from './logic';
 
 interface PlayerPrefs {
   quality: Quality;
   speed: number;
+  subtitles: SubtitlePref;
+  setSubtitles: (s: SubtitlePref) => void;
   setQuality: (q: Quality) => void;
   setSpeed: (s: number) => void;
 }
@@ -16,6 +18,8 @@ export const usePlayerPrefs = create<PlayerPrefs>()(
     (set) => ({
       quality: 'auto',
       speed: 1,
+      subtitles: 'auto',
+      setSubtitles: (subtitles) => set({ subtitles }),
       setQuality: (quality) => set({ quality }),
       setSpeed: (speed) => set({ speed }),
     }),

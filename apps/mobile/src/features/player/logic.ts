@@ -50,3 +50,19 @@ export function formatTime(totalSeconds: number): string {
   const m = Math.floor(s / 60);
   return `${m}:${String(s % 60).padStart(2, '0')}`;
 }
+
+export type SubtitlePref = 'auto' | 'off' | string;
+
+/**
+ * Which subtitle language to show: an explicit choice wins if available; "auto" prefers the app
+ * language, then the track marked default; "off" (or nothing available) shows none.
+ */
+export function chooseSubtitle(
+  subtitles: { language: string; isDefault: boolean }[],
+  pref: SubtitlePref,
+  appLanguage: string,
+): string | null {
+  if (pref === 'off' || subtitles.length === 0) return null;
+  if (pref !== 'auto') return subtitles.some((s) => s.language === pref) ? pref : null;
+  return subtitles.find((s) => s.language === appLanguage)?.language ?? subtitles.find((s) => s.isDefault)?.language ?? null;
+}

@@ -99,3 +99,24 @@ describe('interstitial policy', () => {
     expect(canShowInterstitial(undefined, { transitionsSinceLast: 99, lastShownAt: null, shownToday: 0 }, now)).toBe(false);
   });
 });
+
+describe('subtitle selection', () => {
+  const { chooseSubtitle } = jest.requireActual<typeof import('@/features/player/logic')>('@/features/player/logic');
+  const subs = [
+    { language: 'en', isDefault: true },
+    { language: 'hi', isDefault: false },
+  ];
+
+  it('auto prefers the app language, then the default track', () => {
+    expect(chooseSubtitle(subs, 'auto', 'hi')).toBe('hi');
+    expect(chooseSubtitle(subs, 'auto', 'ta')).toBe('en');
+    expect(chooseSubtitle([{ language: 'hi', isDefault: false }], 'auto', 'en')).toBeNull();
+  });
+
+  it('respects an explicit choice or off', () => {
+    expect(chooseSubtitle(subs, 'en', 'hi')).toBe('en');
+    expect(chooseSubtitle(subs, 'off', 'hi')).toBeNull();
+    expect(chooseSubtitle(subs, 'ta', 'hi')).toBeNull();
+    expect(chooseSubtitle([], 'auto', 'hi')).toBeNull();
+  });
+});

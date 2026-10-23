@@ -4,7 +4,7 @@
  */
 import { forwardRef, useImperativeHandle, useRef } from 'react';
 import { StyleSheet } from 'react-native';
-import Video, { OnLoadData, OnProgressData, ResizeMode, SelectedVideoTrackType, VideoRef, ViewType } from 'react-native-video';
+import Video, { ISO639_1, OnLoadData, OnProgressData, ResizeMode, SelectedTrackType, SelectedVideoTrackType, TextTrackType, VideoRef, ViewType } from 'react-native-video';
 import type { Quality } from './logic';
 
 export interface VideoSurfaceProps {
@@ -15,6 +15,9 @@ export interface VideoSurfaceProps {
   rate: number;
   quality: Quality;
   fill: 'cover' | 'contain';
+  /** WebVTT tracks from the playback API and the language to show (null = off). */
+  subtitles?: { language: string; label: string; url: string }[];
+  subtitleLanguage?: string | null;
   onReady?: (info: { duration: number; width: number; height: number }) => void;
   onProgress?: (position: number, duration: number) => void;
   onBuffering?: (buffering: boolean) => void;
@@ -48,7 +51,12 @@ export const VideoSurface = forwardRef<VideoSurfaceHandle, VideoSurfaceProps>(fu
           bufferForPlaybackAfterRebufferMs: 2_000,
         },
         minLoadRetryCount: 3,
+        textTracks: (props.subtitles ?? []).map((s) => ({ title: s.label, language: s.language as ISO639_1, type: TextTrackType.VTT, uri: s.url })),
       }}
+      selectedTextTrack={
+        props.subtitleLanguage ? { type: SelectedTrackType.LANGUAGE, value: props.subtitleLanguage } : { type: SelectedTrackType.DISABLED }
+      }
+      subtitleStyle={{ fontSize: 16, paddingBottom: 60, opacity: 0.95 }}
       paused={props.paused}
       rate={props.rate}
       repeat={false}

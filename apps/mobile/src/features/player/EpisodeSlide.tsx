@@ -15,7 +15,7 @@ import { colors, compactNumber, overlayText, radius, spacing } from '@/ui/theme'
 import { useRequireAuth } from '../auth/use-require-auth';
 import { useProgressReporter, usePlayback } from './hooks';
 import { LikeButton } from './LikeButton';
-import { effectiveQuality, formatTime, Quality, shouldPlay } from './logic';
+import { chooseSubtitle, effectiveQuality, formatTime, Quality, shouldPlay } from './logic';
 import { usePlayerPrefs } from './prefs-store';
 import { VideoSurface, VideoSurfaceHandle } from './VideoSurface';
 
@@ -39,7 +39,11 @@ export interface EpisodeSlideProps {
   onUnlock: (episode: Episode) => void;
   onOpenComments: (episode: Episode) => void;
   onOpenEpisodes?: () => void;
-  onOpenSettings: (renditions: { name: string; width: number; height: number }[], current: Quality) => void;
+  onOpenSettings: (
+    renditions: { name: string; width: number; height: number }[],
+    current: Quality,
+    subtitles: { language: string; label: string }[],
+  ) => void;
   /** Feed mode: show a button that opens the whole drama. */
   onWatchFull?: () => void;
 }
@@ -49,7 +53,7 @@ export const EpisodeSlide = memo(function EpisodeSlide(props: EpisodeSlideProps)
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
   const requireAuth = useRequireAuth();
-  const { quality: preferredQuality, speed } = usePlayerPrefs();
+  const { quality: preferredQuality, speed, subtitles: subtitlePref } = usePlayerPrefs();
 
   const playback = usePlayback(episode.id, mounted && !episode.locked);
   const surface = useRef<VideoSurfaceHandle>(null);
@@ -118,6 +122,7 @@ export const EpisodeSlide = memo(function EpisodeSlide(props: EpisodeSlideProps)
   const locked = episode.locked || apiError?.code === 'EPISODE_LOCKED';
   const data = playback.data;
   const quality = data ? effectiveQuality(preferredQuality, data.renditions) : 'auto';
+  const subtitleLanguage = data ? chooseSubtitle(data.subtitles, subtitlePref, i18n.language) : null;
 
   return (
     <View style={{ height, backgroundColor: '#000' }} testID={`slide-${episode.number}`}>
@@ -134,6 +139,8 @@ export const EpisodeSlide = memo(function EpisodeSlide(props: EpisodeSlideProps)
           rate={speed}
           quality={quality}
           fill="cover"
+          subtitles={data.subtitles}
+          subtitleLanguage={subtitleLanguage}
           onReady={(info) => {
             setBuffering(false);
             if (info.duration) setDuration(info.duration);
@@ -211,7 +218,7 @@ export const EpisodeSlide = memo(function EpisodeSlide(props: EpisodeSlideProps)
         <LikeButton liked={like.liked} count={compactNumber(like.count, i18n.language)} onToggle={toggleLike} label={t('player.like')} />
         <ActionButton icon={commentIcon} label={compactNumber(episode.commentCount, i18n.language)} a11y={t('player.comments')} onPress={() => props.onOpenComments(episode)} testID="open-comments" />
         {props.onOpenEpisodes ? <ActionButton icon={seriesIcon} label={t('player.episodes')} a11y={t('player.episodes')} onPress={props.onOpenEpisodes} testID="open-episodes" /> : null}
-        {data ? <ActionButton icon={speedIcon} label={`${speed}x`} a11y={t('player.speed')} onPress={() => props.onOpenSettings(data.renditions, quality)} testID="open-settings" /> : null}
+        {data ? <ActionButton icon={speedIcon} label={`${speed}x`} a11y={t('player.speed')} onPress={() => props.onOpenSettings(data.renditions, quality, data.subtitles)} testID="open-settings" /> : null}
       </View>
 
       {/* Progress bar (tap to seek) */}

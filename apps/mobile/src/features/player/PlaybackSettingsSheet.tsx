@@ -12,14 +12,16 @@ export function PlaybackSettingsSheet({
   onClose,
   renditions,
   current,
+  subtitles = [],
 }: {
   visible: boolean;
   onClose: () => void;
   renditions: { name: string; width: number; height: number }[];
   current: Quality;
+  subtitles?: { language: string; label: string }[];
 }) {
   const { t } = useTranslation();
-  const { speed, setQuality, setSpeed } = usePlayerPrefs();
+  const { speed, setQuality, setSpeed, subtitles: subtitlePref, setSubtitles } = usePlayerPrefs();
   return (
     <Sheet visible={visible} onClose={onClose} heightRatio={0.45} testID="playback-settings">
       <Text style={[type.heading, styles.label]}>{t('player.quality')}</Text>
@@ -34,6 +36,18 @@ export function PlaybackSettingsSheet({
           <Pill key={s} label={`${s}x`} active={s === speed} onPress={() => setSpeed(s)} />
         ))}
       </View>
+      {subtitles.length ? (
+        <>
+          <Text style={[type.heading, styles.label]}>{t('player.subtitles')}</Text>
+          <View style={styles.row}>
+            <Pill label={t('player.auto')} active={subtitlePref === 'auto'} onPress={() => setSubtitles('auto')} />
+            <Pill label={t('player.off')} active={subtitlePref === 'off'} onPress={() => setSubtitles('off')} />
+            {subtitles.map((s) => (
+              <Pill key={s.language} label={s.label} active={subtitlePref === s.language} onPress={() => setSubtitles(s.language)} />
+            ))}
+          </View>
+        </>
+      ) : null}
     </Sheet>
   );
 }

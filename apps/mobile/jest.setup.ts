@@ -15,6 +15,8 @@ jest.mock('react-native-video', () => {
     default: Video,
     ResizeMode: { COVER: 'cover', CONTAIN: 'contain' },
     SelectedVideoTrackType: { AUTO: 'auto', RESOLUTION: 'resolution' },
+    SelectedTrackType: { LANGUAGE: 'language', DISABLED: 'disabled' },
+    TextTrackType: { VTT: 'text/vtt' },
     ViewType: { SURFACE: 1 },
   };
 });
