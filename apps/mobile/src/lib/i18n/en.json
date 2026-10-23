@@ -82,6 +82,8 @@
     "reasons": { "SPAM": "Spam", "ABUSE": "Harassment or abuse", "HATE": "Hate speech", "SEXUAL": "Sexual content", "OTHER": "Something else" }
   },
   "myList": {
+    "signInTitle": "Your list lives here",
+    "explore": "Explore",
     "continue": "Continue watching",
     "favorites": "Saved dramas",
     "emptyFavorites": "Dramas you save will appear here.",
@@ -89,6 +91,14 @@
     "signIn": "Sign in to sync your list across devices."
   },
   "profile": {
+    "welcome": "Welcome to Reel Drama",
+    "signInHint": "Sign in to save progress and earn coins",
+    "signOutConfirm": "You can sign back in any time with your email.",
+    "getCoins": "Get more coins",
+    "vipInactive": "Not a member",
+    "vipManage": "Manage",
+    "joinVip": "Join VIP",
+    "sections": {"library":"Library","preferences":"Preferences","about":"About"},
     "guest": "Guest",
     "signIn": "Sign in",
     "signOut": "Sign out",
@@ -117,6 +127,8 @@
     "terms": "By continuing you agree to our Terms and Privacy Policy."
   },
   "wallet": {
+    "balanceHint": "Use coins to unlock episodes",
+    "emptyHistory": "No coin activity yet. Watch an ad to earn your first coins.",
     "title": "My coins",
     "balance": "Balance",
     "earn": "Watch an ad, earn {{count}} coins",
@@ -136,6 +148,10 @@
     "credited": "+{{count}} coins added"
   },
   "vip": {
+    "tagline": "The best way to binge every drama",
+    "soonTitle": "VIP is coming soon",
+    "soonBody": "We’ll let you know as soon as memberships open.",
+    "benefit": {"unlock":{"title":"Every episode unlocked","body":"No coins or ads needed to keep watching."},"noAds":{"title":"No ads","body":"Watch without interruptions."},"early":{"title":"New dramas first","body":"Get new releases before everyone else."}},
     "title": "Reel Drama VIP",
     "benefits": "All episodes unlocked · No ads · New dramas first",
     "subscribe": "Subscribe",

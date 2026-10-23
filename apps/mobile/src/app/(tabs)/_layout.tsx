@@ -5,7 +5,13 @@ import { colors } from '@/ui/theme';
 export default function TabsLayout() {
   const { t } = useTranslation();
   return (
-    <NativeTabs backgroundColor={colors.background} indicatorColor={colors.surfaceRaised} labelStyle={{ selected: { color: colors.text } }} tintColor={colors.accent}>
+    <NativeTabs
+      backgroundColor={colors.background}
+      indicatorColor="rgba(255,45,85,0.16)"
+      labelVisibilityMode="labeled"
+      labelStyle={{ default: { color: colors.textMuted, fontSize: 12 }, selected: { color: colors.text, fontSize: 12, fontWeight: '700' } }}
+      iconColor={{ default: colors.textMuted, selected: colors.accent }}
+      tintColor={colors.accent}>
       <NativeTabs.Trigger name="index">
         <NativeTabs.Trigger.Label>{t('tabs.forYou')}</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf={{ default: 'play.rectangle', selected: 'play.rectangle.fill' }} md="smart_display" />

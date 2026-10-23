@@ -54,7 +54,7 @@ function RootLayout() {
       <Stack screenOptions={{ headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text, contentStyle: { backgroundColor: colors.background } }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="watch/[dramaId]" options={{ headerShown: false, animation: 'fade' }} />
-        <Stack.Screen name="drama/[id]" options={{ title: '', headerTransparent: true }} />
+        <Stack.Screen name="drama/[id]" options={{ title: '', headerTransparent: true, headerStyle: { backgroundColor: 'transparent' } }} />
         <Stack.Screen name="category/[slug]" options={{ title: t('home.categories') }} />
         <Stack.Screen name="search" options={{ title: t('home.search') }} />
         <Stack.Screen name="sign-in" options={{ presentation: 'modal', title: t('profile.signIn') }} />

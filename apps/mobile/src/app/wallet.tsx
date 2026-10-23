@@ -1,4 +1,5 @@
 import { useInfiniteQuery, useMutation, useQuery } from '@tanstack/react-query';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
@@ -7,6 +8,7 @@ import { purchase, storePrices } from '@/features/payments/purchase';
 import { Api } from '@/lib/api/endpoints';
 import { errorMessage } from '@/lib/i18n';
 import { invalidateEntitlements, qk, queryClient } from '@/lib/query';
+import { Icon, type IconName } from '@/ui/Icon';
 import { Button, Caption, EmptyState, ErrorState, LoadingState } from '@/ui/primitives';
 import { colors, radius, spacing, type } from '@/ui/theme';
 
@@ -66,12 +68,16 @@ export default function WalletScreen() {
       contentContainerStyle={{ padding: spacing.lg, gap: spacing.sm }}
       ListHeaderComponent={
         <View style={{ gap: spacing.lg, marginBottom: spacing.lg }}>
-          <View style={styles.balance}>
-            <Caption>{t('wallet.balance')}</Caption>
-            <Text style={styles.balanceValue} testID="wallet-balance">
-              🪙 {wallet.data.balance}
-            </Text>
-          </View>
+          <LinearGradient colors={['#3A2A00', '#1E1606', colors.surface]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.balance}>
+            <Text style={styles.balanceLabel}>{t('wallet.balance')}</Text>
+            <View style={styles.balanceRow}>
+              <Text style={styles.balanceCoin}>🪙</Text>
+              <Text style={styles.balanceValue} testID="wallet-balance">
+                {wallet.data.balance}
+              </Text>
+            </View>
+            <Caption>{t('wallet.balanceHint')}</Caption>
+          </LinearGradient>
 
           {earn?.enabled && earn.rewardCoins ? (
             <View>
@@ -87,7 +93,10 @@ export default function WalletScreen() {
             </View>
           ) : null}
 
-          <Text style={type.heading}>{t('wallet.buy')}</Text>
+          <View style={styles.sectionTitle}>
+            <Icon name="bag-handle" size={20} color={colors.accent} />
+            <Text style={type.heading}>{t('wallet.buy')}</Text>
+          </View>
           {products.data?.paymentsEnabled && coinPacks.length ? (
             coinPacks.map((p) => (
               <Button
@@ -100,17 +109,26 @@ export default function WalletScreen() {
               />
             ))
           ) : (
-            <Caption>{t('wallet.paymentsSoon')}</Caption>
+            <View style={styles.soon}>
+              <Icon name="time-outline" size={20} color={colors.textMuted} />
+              <Caption style={{ flex: 1, fontSize: 13 }}>{t('wallet.paymentsSoon')}</Caption>
+            </View>
           )}
 
           {notice ? <Text style={styles.notice}>{notice}</Text> : null}
-          <Text style={type.heading}>{t('wallet.history')}</Text>
+          <View style={styles.sectionTitle}>
+            <Icon name="receipt" size={20} color={colors.accent} />
+            <Text style={type.heading}>{t('wallet.history')}</Text>
+          </View>
         </View>
       }
-      ListEmptyComponent={history.isPending ? <LoadingState /> : <EmptyState message="—" />}
+      ListEmptyComponent={history.isPending ? <LoadingState /> : <EmptyState icon="receipt-outline" message={t('wallet.emptyHistory')} style={{ paddingVertical: spacing.xl }} />}
       renderItem={({ item }) => (
         <View style={styles.row}>
-          <View>
+          <View style={[styles.rowIcon, { backgroundColor: item.amount > 0 ? 'rgba(52,199,89,0.14)' : colors.surfaceRaised }]}>
+            <Icon name={TXN_ICONS[item.type] ?? 'swap-horizontal'} size={18} color={item.amount > 0 ? colors.success : colors.text} />
+          </View>
+          <View style={{ flex: 1 }}>
             <Text style={styles.rowTitle}>{t(`wallet.types.${item.type}`)}</Text>
             <Caption>{new Date(item.createdAt).toLocaleString(i18n.language)}</Caption>
           </View>
@@ -123,11 +141,27 @@ export default function WalletScreen() {
   );
 }
 
+const TXN_ICONS: Record<string, IconName> = {
+  AD_REWARD: 'play-circle-outline',
+  PURCHASE: 'card-outline',
+  EPISODE_UNLOCK: 'lock-open-outline',
+  REFUND: 'return-up-back-outline',
+  REVERSAL: 'return-down-forward-outline',
+  BONUS: 'gift-outline',
+  ADMIN_ADJUSTMENT: 'construct-outline',
+};
+
 const styles = StyleSheet.create({
-  balance: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.xl, alignItems: 'center', gap: spacing.xs },
-  balanceValue: { color: colors.coin, fontSize: 34, fontWeight: '900' },
+  balance: { borderRadius: radius.lg, padding: spacing.xl, alignItems: 'center', gap: spacing.xs, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,201,77,0.35)' },
+  balanceLabel: { color: colors.coin, fontSize: 13, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase' },
+  balanceRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  balanceCoin: { fontSize: 32 },
+  balanceValue: { color: colors.coin, fontSize: 44, fontWeight: '900' },
+  sectionTitle: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  soon: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg, backgroundColor: colors.surface, borderRadius: radius.lg },
+  rowIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   notice: { color: colors.coin, textAlign: 'center' },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.md },
+  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.md },
   rowTitle: { color: colors.text, fontWeight: '600' },
   amount: { fontSize: 16, fontWeight: '800' },
 });

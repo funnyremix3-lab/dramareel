@@ -1,6 +1,7 @@
-import { ReactNode } from 'react';
+import { Children, ReactNode } from 'react';
 import { ActivityIndicator, Pressable, PressableProps, StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { Icon, type IconName } from './Icon';
 import { colors, radius, spacing, type } from './theme';
 
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'coin';
@@ -81,14 +82,73 @@ export function ErrorState({ message, onRetry }: { message?: string; onRetry?: (
   );
 }
 
-export function EmptyState({ message, action }: { message: string; action?: ReactNode }) {
+export function EmptyState({ message, action, icon, title, style }: { message: string; action?: ReactNode; icon?: IconName; title?: string; style?: StyleProp<ViewStyle> }) {
   return (
-    <Centered style={{ paddingVertical: spacing.xxl }}>
+    <Centered style={[{ paddingVertical: spacing.xxl, gap: spacing.sm }, style]}>
+      {icon ? (
+        <View style={styles.emptyIcon}>
+          <Icon name={icon} size={30} color={colors.accent} />
+        </View>
+      ) : null}
+      {title ? <Text style={[type.heading, { textAlign: 'center' }]}>{title}</Text> : null}
       <Text style={styles.stateText} testID="empty-state">
         {message}
       </Text>
       {action}
     </Centered>
+  );
+}
+
+/** Tappable settings/menu row: leading icon, label, optional value and chevron. */
+export function ListRow({
+  icon,
+  label,
+  value,
+  onPress,
+  danger,
+  testID,
+}: {
+  icon: IconName;
+  label: string;
+  value?: string;
+  onPress?: () => void;
+  danger?: boolean;
+  testID?: string;
+}) {
+  const tint = danger ? colors.danger : colors.text;
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button" testID={testID} style={({ pressed }) => [styles.row, pressed && { backgroundColor: colors.surfaceRaised }]}>
+      <View style={[styles.rowIcon, danger && { backgroundColor: 'rgba(255,69,58,0.12)' }]}>
+        <Icon name={icon} size={18} color={tint} />
+      </View>
+      <Text style={[styles.rowLabel, { color: tint }]} numberOfLines={1}>
+        {label}
+      </Text>
+      {value ? (
+        <Text style={styles.rowValue} numberOfLines={1}>
+          {value}
+        </Text>
+      ) : null}
+      {onPress && !danger ? <Icon name="chevron-forward" size={18} color={colors.textMuted} /> : null}
+    </Pressable>
+  );
+}
+
+/** Rounded container that groups ListRows with hairline separators. */
+export function ListGroup({ children, title }: { children: ReactNode; title?: string }) {
+  const rows = Children.toArray(children).filter(Boolean);
+  return (
+    <View style={{ gap: spacing.sm }}>
+      {title ? <Text style={styles.groupTitle}>{title}</Text> : null}
+      <View style={styles.group}>
+        {rows.map((row, i) => (
+          <View key={i}>
+            {i > 0 ? <View style={styles.separator} /> : null}
+            {row}
+          </View>
+        ))}
+      </View>
+    </View>
   );
 }
 
@@ -118,4 +178,12 @@ const styles = StyleSheet.create({
   pill: { paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderRadius: radius.pill, backgroundColor: colors.surface },
   pillActive: { backgroundColor: colors.accent },
   pillText: { color: colors.textSecondary, fontWeight: '600' },
+  emptyIcon: { width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(255,45,85,0.12)', alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm },
+  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, minHeight: 52 },
+  rowIcon: { width: 32, height: 32, borderRadius: 9, backgroundColor: colors.surfaceRaised, alignItems: 'center', justifyContent: 'center' },
+  rowLabel: { flex: 1, fontSize: 15, fontWeight: '600' },
+  rowValue: { color: colors.textSecondary, fontSize: 14, maxWidth: '40%' },
+  group: { backgroundColor: colors.surface, borderRadius: radius.lg, overflow: 'hidden' },
+  groupTitle: { color: colors.textMuted, fontSize: 12, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', paddingHorizontal: spacing.xs },
+  separator: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: spacing.lg + 32 + spacing.md },
 });

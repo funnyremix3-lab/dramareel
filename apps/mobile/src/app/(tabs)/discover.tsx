@@ -4,10 +4,12 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SponsoredCard } from '@/features/ads/SponsoredCard';
+import { ContinueCard } from '@/features/dramas/ContinueCard';
 import { FeaturedCarousel, Rail } from '@/features/dramas/components';
 import { Api } from '@/lib/api/endpoints';
 import { errorMessage } from '@/lib/i18n';
 import { qk } from '@/lib/query';
+import { Icon } from '@/ui/Icon';
 import { ErrorState, LoadingState, Pill } from '@/ui/primitives';
 import { colors, radius, spacing, type } from '@/ui/theme';
 
@@ -27,8 +29,14 @@ export default function DiscoverScreen() {
       style={{ backgroundColor: colors.background }}
       contentContainerStyle={{ paddingTop: insets.top + spacing.md, paddingBottom: spacing.xxl }}
       refreshControl={<RefreshControl refreshing={home.isRefetching} onRefresh={() => void home.refetch()} tintColor={colors.text} />}>
+      <View style={styles.topBar}>
+        <Text style={styles.brand}>
+          Reel<Text style={{ color: colors.accent }}> Drama</Text>
+        </Text>
+      </View>
       <Pressable onPress={() => router.push('/search')} style={styles.search} accessibilityRole="search" testID="open-search">
-        <Text style={styles.searchText}>🔍  {t('home.search')}</Text>
+        <Icon name="search" size={18} color={colors.textMuted} />
+        <Text style={styles.searchText}>{t('home.search')}</Text>
       </Pressable>
 
       <FeaturedCarousel dramas={h.featured} />
@@ -43,21 +51,13 @@ export default function DiscoverScreen() {
 
       {h.continueWatching.length ? (
         <View style={{ marginTop: spacing.xl }}>
-          <Text style={[type.heading, { paddingHorizontal: spacing.lg, marginBottom: spacing.md }]}>{t('home.continue')}</Text>
+          <View style={styles.sectionTitle}>
+            <Icon name="play-circle" size={20} color={colors.accent} />
+            <Text style={type.heading}>{t('home.continue')}</Text>
+          </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}>
             {h.continueWatching.map((c) => (
-              <Pressable
-                key={c.drama.id}
-                style={styles.continue}
-                onPress={() => router.push({ pathname: '/watch/[dramaId]', params: { dramaId: c.drama.id, episode: String(c.episodeNumber) } })}>
-                <Text style={styles.continueTitle} numberOfLines={1}>
-                  {c.drama.title}
-                </Text>
-                <Text style={styles.continueEp}>{t('drama.resume', { n: c.episodeNumber })}</Text>
-                <View style={styles.track}>
-                  <View style={[styles.fill, { width: `${Math.min(100, (c.positionSeconds / Math.max(1, c.durationSeconds)) * 100)}%` }]} />
-                </View>
-              </Pressable>
+              <ContinueCard key={c.drama.id} item={c} />
             ))}
           </ScrollView>
         </View>
@@ -72,12 +72,10 @@ export default function DiscoverScreen() {
 }
 
 const styles = StyleSheet.create({
-  search: { marginHorizontal: spacing.lg, marginBottom: spacing.lg, backgroundColor: colors.surface, borderRadius: radius.pill, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
-  searchText: { color: colors.textMuted },
+  topBar: { paddingHorizontal: spacing.lg, marginBottom: spacing.md },
+  brand: { color: colors.text, fontSize: 24, fontWeight: '800', letterSpacing: 0.3 },
+  search: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginHorizontal: spacing.lg, marginBottom: spacing.lg, backgroundColor: colors.surface, borderRadius: radius.pill, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+  searchText: { color: colors.textMuted, fontSize: 15 },
+  sectionTitle: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg, marginBottom: spacing.md },
   categories: { paddingHorizontal: spacing.lg, gap: spacing.sm, marginTop: spacing.lg },
-  continue: { width: 180, backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.md, gap: 4 },
-  continueTitle: { color: colors.text, fontWeight: '700' },
-  continueEp: { color: colors.textSecondary, fontSize: 12 },
-  track: { height: 3, backgroundColor: colors.border, borderRadius: 2, marginTop: spacing.sm, overflow: 'hidden' },
-  fill: { height: 3, backgroundColor: colors.accent },
 });

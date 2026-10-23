@@ -11,8 +11,9 @@ import type { Me } from '@/lib/api/types';
 import { config } from '@/lib/config';
 import { currentLanguage, errorMessage, LANGUAGES, setLanguage } from '@/lib/i18n';
 import { qk, queryClient } from '@/lib/query';
-import { Button, Caption, Pill } from '@/ui/primitives';
-import { colors, radius, spacing, type } from '@/ui/theme';
+import { Icon, type IconName } from '@/ui/Icon';
+import { Caption, ListGroup, ListRow } from '@/ui/primitives';
+import { colors, spacing } from '@/ui/theme';
 
 export default function SettingsScreen() {
   const { t } = useTranslation();
@@ -50,26 +51,29 @@ export default function SettingsScreen() {
   const toggle = (key: keyof Me['consents']) => (value: boolean) => c && consents.mutate({ ...c, [key]: value });
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={type.heading}>{t('settings.language')}</Text>
-      <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+    <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={styles.container}>
+      <ListGroup title={t('settings.language')}>
         {LANGUAGES.map((l) => (
-          <Pill key={l.code} label={l.label} active={currentLanguage() === l.code} onPress={() => void setLanguage(l.code)} />
+          <ListRow
+            key={l.code}
+            icon={currentLanguage() === l.code ? 'radio-button-on' : 'radio-button-off'}
+            label={l.label}
+            onPress={() => void setLanguage(l.code)}
+          />
         ))}
-      </View>
+      </ListGroup>
 
-      {signedIn && c ? (
-        <View style={styles.card}>
-          <Text style={type.heading}>{t('settings.privacy')}</Text>
-          <Row label={t('settings.analytics')} value={c.analytics} onChange={toggle('analytics')} />
-          <Row label={t('settings.personalizedAds')} value={c.adsPersonalization} onChange={toggle('adsPersonalization')} />
-          <Row label={t('settings.marketing')} value={c.marketing} onChange={toggle('marketing')} />
-          <Row label={t('settings.push')} value={c.push} onChange={toggle('push')} />
-        </View>
-      ) : (
-        <View style={styles.card}>
-          <Text style={type.heading}>{t('settings.privacy')}</Text>
-          <Row
+      <ListGroup title={t('settings.privacy')}>
+        {signedIn && c ? (
+          [
+            <ToggleRow key="a" icon="analytics-outline" label={t('settings.analytics')} value={c.analytics} onChange={toggle('analytics')} />,
+            <ToggleRow key="b" icon="megaphone-outline" label={t('settings.personalizedAds')} value={c.adsPersonalization} onChange={toggle('adsPersonalization')} />,
+            <ToggleRow key="c" icon="mail-outline" label={t('settings.marketing')} value={c.marketing} onChange={toggle('marketing')} />,
+            <ToggleRow key="d" icon="notifications-outline" label={t('settings.push')} value={c.push} onChange={toggle('push')} />,
+          ]
+        ) : (
+          <ToggleRow
+            icon="analytics-outline"
             label={t('settings.analytics')}
             value={guestAnalytics}
             onChange={(v) => {
@@ -77,30 +81,40 @@ export default function SettingsScreen() {
               void setGuestAnalyticsConsent(v);
             }}
           />
-        </View>
-      )}
+        )}
+      </ListGroup>
 
-      <Button label={t('settings.privacyPolicy')} variant="ghost" onPress={() => Linking.openURL(config.privacyPolicyUrl)} />
-      <Button label={t('settings.terms')} variant="ghost" onPress={() => Linking.openURL(config.termsUrl)} />
-      <Button label={t('settings.licenses')} variant="ghost" onPress={() => router.push('/licenses')} />
-      {signedIn ? <Button label={t('settings.deleteAccount')} variant="ghost" onPress={deleteAccount} testID="delete-account" /> : null}
+      <ListGroup title={t('profile.sections.about')}>
+        {config.privacyPolicyUrl ? <ListRow icon="shield-checkmark-outline" label={t('settings.privacyPolicy')} onPress={() => void Linking.openURL(config.privacyPolicyUrl)} /> : null}
+        {config.termsUrl ? <ListRow icon="document-text-outline" label={t('settings.terms')} onPress={() => void Linking.openURL(config.termsUrl)} /> : null}
+        <ListRow icon="code-slash-outline" label={t('settings.licenses')} onPress={() => router.push('/licenses')} />
+      </ListGroup>
+
+      {signedIn ? (
+        <ListGroup>
+          <ListRow icon="trash-outline" label={t('settings.deleteAccount')} onPress={deleteAccount} danger testID="delete-account" />
+        </ListGroup>
+      ) : null}
       <Caption style={{ textAlign: 'center' }}>{t('settings.version', { version: Constants.expoConfig?.version ?? '' })}</Caption>
     </ScrollView>
   );
 }
 
-function Row({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
+function ToggleRow({ icon, label, value, onChange }: { icon: IconName; label: string; value: boolean; onChange: (v: boolean) => void }) {
   return (
     <View style={styles.row}>
+      <View style={styles.rowIcon}>
+        <Icon name={icon} size={18} color={colors.text} />
+      </View>
       <Text style={styles.rowLabel}>{label}</Text>
-      <Switch value={value} onValueChange={onChange} trackColor={{ true: colors.accent }} />
+      <Switch value={value} onValueChange={onChange} trackColor={{ true: colors.accent, false: colors.border }} thumbColor={colors.text} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { padding: spacing.lg, gap: spacing.md },
-  card: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.lg, gap: spacing.md, marginTop: spacing.md },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  rowLabel: { color: colors.text, fontSize: 15, flex: 1 },
+  container: { padding: spacing.lg, gap: spacing.xl, paddingBottom: spacing.xxl },
+  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, minHeight: 52 },
+  rowIcon: { width: 32, height: 32, borderRadius: 9, backgroundColor: colors.surfaceRaised, alignItems: 'center', justifyContent: 'center' },
+  rowLabel: { color: colors.text, fontSize: 15, fontWeight: '600', flex: 1 },
 });

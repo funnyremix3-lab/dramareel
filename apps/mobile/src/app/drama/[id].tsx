@@ -12,6 +12,7 @@ import { track } from '@/lib/analytics';
 import { Api } from '@/lib/api/endpoints';
 import { errorMessage } from '@/lib/i18n';
 import { qk, queryClient } from '@/lib/query';
+import { Icon } from '@/ui/Icon';
 import { Button, Caption, ErrorState, LoadingState, Pill } from '@/ui/primitives';
 import { colors, compactNumber, spacing, type } from '@/ui/theme';
 
@@ -43,7 +44,7 @@ export default function DramaDetailScreen() {
   return (
     <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={{ paddingBottom: spacing.xxl }}>
       <View style={{ width, height: width * 1.1 }}>
-        {d.coverUrl ? <Image source={d.coverUrl} style={StyleSheet.absoluteFill} contentFit="cover" /> : null}
+        {d.coverUrl || d.posterUrl ? <Image source={d.coverUrl ?? d.posterUrl} style={StyleSheet.absoluteFill} contentFit="cover" /> : null}
         <LinearGradient colors={['rgba(11,11,15,0.2)', colors.background]} style={StyleSheet.absoluteFill} />
         <View style={styles.hero}>
           <Text style={type.title} testID="drama-title">
@@ -65,11 +66,13 @@ export default function DramaDetailScreen() {
           testID="play-drama"
           label={d.resume && !d.resume.completed ? t('drama.resume', { n: d.resume.episodeNumber }) : t('drama.play')}
           onPress={() => watch(d.resume?.episodeNumber)}
+          icon={<Icon name="play" size={18} color={colors.text} />}
           style={{ flex: 1 }}
         />
         <Button
           testID="toggle-favorite"
           label={d.isFavorite ? t('drama.inList') : t('drama.addToList')}
+          icon={<Icon name={d.isFavorite ? 'bookmark' : 'bookmark-outline'} size={18} color={d.isFavorite ? colors.accent : colors.text} />}
           variant="secondary"
           loading={favorite.isPending}
           onPress={() => requireAuth(() => favorite.mutate(!d.isFavorite))}

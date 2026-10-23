@@ -1,29 +1,45 @@
 import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/features/auth/auth-store';
+import { ContinueCard } from '@/features/dramas/ContinueCard';
 import { DramaCard } from '@/features/dramas/components';
 import { Api } from '@/lib/api/endpoints';
 import { errorMessage } from '@/lib/i18n';
 import { qk } from '@/lib/query';
+import { Icon, type IconName } from '@/ui/Icon';
 import { Button, Caption, EmptyState, ErrorState, LoadingState } from '@/ui/primitives';
 import { colors, radius, spacing, type } from '@/ui/theme';
+
+const COLUMNS = 3;
 
 export default function MyListScreen() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const signedIn = useAuth((s) => s.status === 'signedIn');
   const history = useQuery({ queryKey: qk.history, queryFn: () => Api.history(), enabled: signedIn });
   const favorites = useQuery({ queryKey: qk.favorites, queryFn: () => Api.favorites(), enabled: signedIn });
 
+  const header = (
+    <View style={[styles.header, { paddingTop: insets.top + spacing.lg }]}>
+      <Text style={styles.pageTitle}>{t('tabs.myList')}</Text>
+    </View>
+  );
+
   if (!signedIn) {
     return (
-      <EmptyState
-        message={t('myList.signIn')}
-        action={<Button label={t('profile.signIn')} onPress={() => router.push('/sign-in')} style={{ marginTop: spacing.lg }} testID="mylist-sign-in" />}
-      />
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        {header}
+        <EmptyState
+          icon="bookmarks"
+          title={t('myList.signInTitle')}
+          message={t('myList.signIn')}
+          action={<Button label={t('profile.signIn')} onPress={() => router.push('/sign-in')} style={{ marginTop: spacing.lg, alignSelf: 'stretch' }} testID="mylist-sign-in" />}
+        />
+      </View>
     );
   }
   if (history.isPending || favorites.isPending) return <LoadingState />;
@@ -32,37 +48,37 @@ export default function MyListScreen() {
   }
 
   const inProgress = history.data.items.filter((h) => !h.completed);
+  const saved = favorites.data.items;
+  const cardWidth = Math.floor((width - spacing.lg * 2 - spacing.md * (COLUMNS - 1)) / COLUMNS);
+  const explore = () => router.navigate('/discover');
+
   return (
-    <ScrollView contentContainerStyle={{ paddingTop: insets.top + spacing.md, paddingBottom: spacing.xxl }}>
-      <Text style={[type.heading, styles.heading]}>{t('myList.continue')}</Text>
+    <ScrollView
+      style={{ backgroundColor: colors.background }}
+      contentContainerStyle={{ paddingBottom: spacing.xxl }}
+      refreshControl={
+        <RefreshControl refreshing={history.isRefetching || favorites.isRefetching} onRefresh={() => void Promise.all([history.refetch(), favorites.refetch()])} tintColor={colors.text} />
+      }>
+      {header}
+
+      <SectionTitle icon="play-circle" title={t('myList.continue')} count={inProgress.length} />
       {inProgress.length === 0 ? (
-        <Caption style={styles.emptyLine}>{t('myList.emptyHistory')}</Caption>
+        <InlineEmpty icon="film-outline" message={t('myList.emptyHistory')} action={t('myList.explore')} onAction={explore} />
       ) : (
-        inProgress.map((h) => (
-          <Pressable
-            key={h.episodeId}
-            style={styles.row}
-            onPress={() => router.push({ pathname: '/watch/[dramaId]', params: { dramaId: h.drama.id, episode: String(h.episodeNumber) } })}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.rowTitle} numberOfLines={1}>
-                {h.drama.title}
-              </Text>
-              <Caption>{t('drama.resume', { n: h.episodeNumber })}</Caption>
-              <View style={styles.track}>
-                <View style={[styles.fill, { width: `${Math.min(100, (h.positionSeconds / Math.max(1, h.durationSeconds)) * 100)}%` }]} />
-              </View>
-            </View>
-          </Pressable>
-        ))
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hList}>
+          {inProgress.map((h) => (
+            <ContinueCard key={h.episodeId} item={h} />
+          ))}
+        </ScrollView>
       )}
 
-      <Text style={[type.heading, styles.heading, { marginTop: spacing.xl }]}>{t('myList.favorites')}</Text>
-      {favorites.data.items.length === 0 ? (
-        <Caption style={styles.emptyLine}>{t('myList.emptyFavorites')}</Caption>
+      <SectionTitle icon="bookmark" title={t('myList.favorites')} count={saved.length} style={{ marginTop: spacing.xl }} />
+      {saved.length === 0 ? (
+        <InlineEmpty icon="bookmark-outline" message={t('myList.emptyFavorites')} action={t('myList.explore')} onAction={explore} />
       ) : (
         <View style={styles.grid}>
-          {favorites.data.items.map((d) => (
-            <DramaCard key={d.id} drama={d} width={108} />
+          {saved.map((d) => (
+            <DramaCard key={d.id} drama={d} width={cardWidth} />
           ))}
         </View>
       )}
@@ -70,12 +86,35 @@ export default function MyListScreen() {
   );
 }
 
+function SectionTitle({ icon, title, count, style }: { icon: IconName; title: string; count: number; style?: object }) {
+  return (
+    <View style={[styles.sectionTitle, style]}>
+      <Icon name={icon} size={20} color={colors.accent} />
+      <Text style={type.heading}>{title}</Text>
+      {count > 0 ? <Text style={styles.count}>{count}</Text> : null}
+    </View>
+  );
+}
+
+function InlineEmpty({ icon, message, action, onAction }: { icon: IconName; message: string; action: string; onAction: () => void }) {
+  return (
+    <View style={styles.inlineEmpty}>
+      <Icon name={icon} size={26} color={colors.textMuted} />
+      <Caption style={{ flex: 1, fontSize: 13 }}>{message}</Caption>
+      <Text style={styles.inlineAction} onPress={onAction} accessibilityRole="button">
+        {action}
+      </Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  heading: { paddingHorizontal: spacing.lg, marginBottom: spacing.md },
-  emptyLine: { paddingHorizontal: spacing.lg },
-  row: { marginHorizontal: spacing.lg, marginBottom: spacing.sm, padding: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md },
-  rowTitle: { color: colors.text, fontWeight: '700' },
-  track: { height: 3, backgroundColor: colors.border, borderRadius: 2, marginTop: spacing.sm, overflow: 'hidden' },
-  fill: { height: 3, backgroundColor: colors.accent },
+  header: { paddingHorizontal: spacing.lg, paddingBottom: spacing.lg },
+  pageTitle: { ...type.title, fontSize: 28 },
+  sectionTitle: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg, marginBottom: spacing.md },
+  count: { color: colors.textSecondary, backgroundColor: colors.surfaceRaised, borderRadius: radius.pill, paddingHorizontal: spacing.sm, paddingVertical: 1, fontSize: 12, fontWeight: '700', overflow: 'hidden' },
+  inlineEmpty: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginHorizontal: spacing.lg, padding: spacing.lg, backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+  inlineAction: { color: colors.accent, fontWeight: '700', fontSize: 13 },
+  hList: { paddingHorizontal: spacing.lg, gap: spacing.md },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, paddingHorizontal: spacing.lg },
 });
