@@ -11,6 +11,14 @@ export function configureApp(app: INestApplication, env: Env) {
   app.setGlobalPrefix(API_PREFIX, { exclude: [{ path: 'dev-media/*path', method: RequestMethod.GET }] });
   app.use(helmet());
 
+  // API responses are per-user JSON. Express's automatic ETags let Android's HTTP cache turn them
+  // into bodyless 304s, which the app reads as failures, so API routes are never cached.
+  (app.getHttpAdapter().getInstance() as { set(key: string, value: unknown): void }).set('etag', false);
+  app.use((req: { path: string }, res: { setHeader(name: string, value: string): void }, next: () => void) => {
+    if (req.path.startsWith(`/${API_PREFIX}/`)) res.setHeader('Cache-Control', 'private, no-store');
+    next();
+  });
+
   const origins = env.CORS_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean);
   app.enableCors({
     origin: origins.length ? origins : false,

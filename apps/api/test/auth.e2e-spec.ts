@@ -21,6 +21,12 @@ describe('Auth & /me (e2e)', () => {
     await http.get('/api/v1/health/ready').expect(200, { status: 'ok' });
   });
 
+  it('API responses are never cached (no ETag, so no bodyless 304s)', async () => {
+    const res = await http.get('/api/v1/health/live').expect(200);
+    expect(res.headers.etag).toBeUndefined();
+    expect(res.headers['cache-control']).toBe('private, no-store');
+  });
+
   it('rejects requests without a token with the standard error shape', async () => {
     const res = await http.get('/api/v1/me').expect(401);
     expect(res.body.error).toMatchObject({ code: 'UNAUTHENTICATED' });
