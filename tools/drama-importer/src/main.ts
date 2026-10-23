@@ -4,6 +4,7 @@
  *   npm run import -- plan    --video src.mp4 --captions src.en-orig.json3 --out work/
  *   npm run import -- import  --video src.mp4 --captions … --subs en=src.en.vtt,hi=src.hi.vtt \
  *                              --title "…" --slug my-drama --out work/ [--categories romance,family]
+ *   npm run import -- poster  --video src.mp4 --captions … --out work/ [--poster-at 42]   # replace poster
  *   npm run import -- publish --out work/ [--watch]   # publish each episode as soon as it is transcoded
  *
  * Cuts land on pauses between sentences (caption word gaps confirmed by audio silence) as close
@@ -16,7 +17,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { AdminApi } from './api';
-import { dedupeRollingCues, parseJson3, parseVtt, speechPauses, wordsToLines, type Cue } from './captions';
+import { dedupeRollingCues, parseJson3, parseVtt, quietestMoment, speechPauses, wordsToLines, type Cue } from './captions';
 import { formatTime, mergeBoundaries, parseSilences, planEpisodes, type Segment } from './plan';
 import { sliceCues, toVtt } from './vtt';
 
@@ -133,6 +134,34 @@ function parseSubs(spec: string | undefined): { lang: string; file: string }[] {
 
 const LABELS: Record<string, string> = { en: 'English', hi: 'हिन्दी' };
 
+/**
+ * Writes a poster frame. Without --poster-at it picks the longest speech-free moment in the first
+ * three minutes, so burned-in subtitles are not on the poster.
+ */
+async function writePoster(args: Args, video: string, file: string): Promise<number> {
+  let at = typeof args['poster-at'] === 'string' ? Number(args['poster-at']) : NaN;
+  if (Number.isNaN(at)) {
+    const words = typeof args.captions === 'string' ? parseJson3(await readFile(args.captions, 'utf8')) : [];
+    at = quietestMoment(words, 5, Math.min(180, await probeDuration(video))) ?? 30;
+  }
+  await exec(FFMPEG, ['-hide_banner', '-loglevel', 'error', '-y', '-ss', at.toFixed(2), '-i', video, '-frames:v', '1', '-vf', 'scale=720:-2', '-q:v', '3', file]);
+  return at;
+}
+
+/** Re-renders the poster of an already imported drama and replaces it through the Admin API. */
+async function replacePoster(args: Args) {
+  const out = resolve(str(args, 'out'));
+  const state = await loadState(out);
+  if (!state?.dramaId) throw new Error(`no import state in ${out}`);
+  const file = join(out, 'poster.jpg');
+  const at = await writePoster(args, resolve(str(args, 'video')), file);
+  const client = await api(args);
+  state.posterKey = await client.uploadPoster(state.dramaId, file);
+  await client.updateDrama(state.dramaId, { posterKey: state.posterKey, coverKey: state.posterKey });
+  await saveState(out, state);
+  console.log(`poster replaced (frame at ${formatTime(at)})`);
+}
+
 async function importDrama(args: Args) {
   const out = resolve(str(args, 'out'));
   await mkdir(out, { recursive: true });
@@ -154,10 +183,7 @@ async function importDrama(args: Args) {
     subCues.set(s.lang, s.file.endsWith('.json3') ? wordsToLines(parseJson3(raw)) : dedupeRollingCues(parseVtt(raw)));
   }
   const poster = join(out, 'poster.jpg');
-  if (!existsSync(poster)) {
-    const at = num(args, 'poster-at', Math.min(30, state.segments[0].end / 2));
-    await exec(FFMPEG, ['-hide_banner', '-loglevel', 'error', '-y', '-ss', String(at), '-i', video, '-frames:v', '1', '-vf', 'scale=720:-2', '-q:v', '3', poster]);
-  }
+  if (!existsSync(poster)) await writePoster(args, video, poster);
 
   // Drama and poster first, so the app can show it as soon as episode 1 is ready.
   const client = await api(args);
@@ -226,12 +252,17 @@ async function publish(args: Args) {
   for (;;) {
     const state = await loadState(out);
     if (state?.dramaId) {
-      for (const [n, e] of Object.entries(state.episodes)) {
-        const number = Number(n);
-        if (published.has(number) || !e.assetId) continue;
+      // Episodes are queued in order, so stop at the first one that is not ready yet: one request per poll.
+      const pending = Object.entries(state.episodes)
+        .map(([n, e]) => ({ number: Number(n), ...e }))
+        .filter((e) => !published.has(e.number))
+        .sort((x, y) => x.number - y.number);
+      for (const e of pending) {
+        const number = e.number;
+        if (!e.assetId) break;
         const asset = await client.videoAsset(e.assetId);
         if (asset.status === 'FAILED') throw new Error(`EP${number} transcode failed: ${asset.lastError ?? ''}`);
-        if (asset.status !== 'READY') continue;
+        if (asset.status !== 'READY') break;
         await client.publishEpisode(e.id);
         published.add(number);
         if (!dramaPublished) {
@@ -265,6 +296,7 @@ async function main() {
     }
   } else if (command === 'import') await importDrama(args);
   else if (command === 'publish') await publish(args);
+  else if (command === 'poster') await replacePoster(args);
   else console.log('usage: npm run import -- <plan|import|publish> --video … --captions … --out …  (see src/main.ts)');
 }
 

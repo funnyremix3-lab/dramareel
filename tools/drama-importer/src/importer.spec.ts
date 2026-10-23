@@ -1,4 +1,4 @@
-import { dedupeRollingCues, parseJson3, parseVtt, speechPauses, wordsToLines } from './captions';
+import { dedupeRollingCues, parseJson3, parseVtt, quietestMoment, speechPauses, wordsToLines } from './captions';
 import { formatTime, mergeBoundaries, parseSilences, planEpisodes } from './plan';
 import { sliceCues, toVtt } from './vtt';
 
@@ -89,6 +89,14 @@ describe('captions', () => {
     expect(lines.map((l) => l.text)).toEqual(['I know.', 'Wait', 'what happened']);
     expect(lines[0]).toMatchObject({ start: 0, end: 0.7 });
     expect(wordsToLines([w(0, 'aaaa'), w(0.3, 'bbbb'), w(0.6, 'cccc')], 9).map((l) => l.text)).toEqual(['aaaa bbbb', 'cccc']);
+  });
+
+  it('picks the middle of the longest speech-free stretch for the poster', () => {
+    const w = (start: number) => ({ start, end: start + 5, text: 'x' }); // stretched auto-caption words
+    // words capped at 0.7 s: gaps are 6.2–10, 10.7–20 (longest, 9.3 s) and 21.7–30
+    expect(quietestMoment([w(5), w(5.5), w(10), w(20), w(21)], 5, 30)).toBeCloseTo(15.35, 5);
+    expect(quietestMoment([w(0), w(1)], 0, 4)).toBeCloseTo(2.85, 5); // 1.7–4 is quiet
+    expect(quietestMoment([w(0), w(0.7), w(1.4), w(2.1)], 0, 2.8)).toBeNull();
   });
 
   it('parses VTT and drops rolling-caption repeats', () => {

@@ -19,13 +19,18 @@ export class AdminApi {
     return ((await res.json()) as { accessToken: string }).accessToken;
   }
 
-  async request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  async request<T>(method: string, path: string, body?: unknown, attempt = 0): Promise<T> {
     const res = await fetch(`${this.baseUrl}${path}`, {
       method,
       headers: { Authorization: `Bearer ${this.token}`, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     const text = await res.text();
+    // The API rate-limits per user; back off and retry instead of failing a long import.
+    if (res.status === 429 && attempt < 6) {
+      await new Promise((r) => setTimeout(r, 5_000 * 2 ** attempt));
+      return this.request<T>(method, path, body, attempt + 1);
+    }
     if (!res.ok) throw new Error(`${method} ${path} → HTTP ${res.status}: ${text.slice(0, 300)}`);
     return (text ? JSON.parse(text) : undefined) as T;
   }

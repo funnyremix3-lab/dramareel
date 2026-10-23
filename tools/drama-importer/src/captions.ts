@@ -115,6 +115,23 @@ export function wordsToLines(words: Cue[], maxChars = 42, maxSeconds = 4, pause 
 }
 
 /**
+ * Middle of the longest stretch without speech inside [from, to]. Burned-in subtitles only show
+ * while someone speaks, so a frame from here has no caption text on it.
+ */
+export function quietestMoment(words: Cue[], from: number, to: number, maxWord = 0.7): number | null {
+  const inside = words.filter((w) => w.end > from && w.start < to);
+  let best: { at: number; len: number } | null = null;
+  let cursor = from;
+  for (const w of [...inside, { start: to, end: to, text: '' }]) {
+    const len = w.start - cursor;
+    if (len > (best?.len ?? 0)) best = { at: cursor + len / 2, len };
+    cursor = Math.max(cursor, Math.min(w.end, w.start + maxWord));
+  }
+  // Under ~1.5 s there is no reliable caption-free frame.
+  return best && best.len >= 1.5 ? best.at : null;
+}
+
+/**
  * Points where speech pauses: the gap between consecutive words. A gap after sentence-ending
  * punctuation counts double, so cuts land between sentences rather than between phrases.
  */
