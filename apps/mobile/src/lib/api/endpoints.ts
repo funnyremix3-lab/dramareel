@@ -78,7 +78,8 @@ export const Api = {
 
   // ads
   adsConfig: () => api<AdsConfig>('/ads/config', { query: { platform } }),
-  serveSponsored: (placement: string) => api<SponsoredServe | undefined>('/ads/serve', { query: { placement, platform } }),
+  // 204 (no eligible campaign) becomes null — query results must never be undefined.
+  serveSponsored: async (placement: string) => (await api<SponsoredServe | undefined>('/ads/serve', { query: { placement, platform } })) ?? null,
   adImpression: (serveToken: string) => api<{ recorded: boolean }>('/ads/impressions', { method: 'POST', body: { serveToken } }),
   adClick: (serveToken: string) => api<{ destinationUrl: string }>('/ads/clicks', { method: 'POST', body: { serveToken } }),
 

@@ -1,13 +1,17 @@
 import { usePreventScreenCapture } from 'expo-screen-capture';
 import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { FlatList, ListViewToken, useWindowDimensions, View } from 'react-native';
+import { FlatList, ListViewToken, View } from 'react-native';
 import type { Episode } from '@/lib/api/types';
+import { config } from '@/lib/config';
 import { CommentsSheet } from '../comments/CommentsSheet';
 import { UnlockSheet } from '../wallet/UnlockSheet';
 import { EpisodeSlide } from './EpisodeSlide';
 import { useScreenActive } from './hooks';
 import { Quality, shouldMountPlayer } from './logic';
 import { PlaybackSettingsSheet } from './PlaybackSettingsSheet';
+
+// Screen-capture blocking (FLAG_SECURE) only in production: dev/preview builds need screenshots for testing.
+const usePreventCapture = config.variant === 'production' ? usePreventScreenCapture : () => undefined;
 
 export interface PagerItem {
   key: string;
@@ -39,8 +43,9 @@ export const EpisodePager = forwardRef<
     externalPaused?: boolean;
   }
 >(function EpisodePager({ items, initialIndex = 0, onActiveChange, onOpenEpisodes, onEndReached, onUnlocked, autoAdvance = true, externalPaused = false }, ref) {
-  usePreventScreenCapture(); // Android FLAG_SECURE / iOS capture blocking while watching
-  const { height } = useWindowDimensions();
+  usePreventCapture(); // Android FLAG_SECURE / iOS capture blocking while watching (production)
+  // Pages must match the pager's own height (tab bars/insets make it shorter than the window).
+  const [height, setHeight] = useState(0);
   const list = useRef<FlatList<PagerItem>>(null);
   const screenActive = useScreenActive();
   const [active, setActive] = useState(initialIndex);
@@ -72,7 +77,11 @@ export const EpisodePager = forwardRef<
   const viewabilityConfig = useMemo(() => ({ itemVisiblePercentThreshold: 80 }), []);
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#000' }} testID="episode-pager">
+    <View
+      style={{ flex: 1, backgroundColor: '#000' }}
+      testID="episode-pager"
+      onLayout={(e) => setHeight(Math.round(e.nativeEvent.layout.height))}>
+      {height > 0 ? (
       <FlatList
         ref={list}
         data={items}
@@ -112,6 +121,7 @@ export const EpisodePager = forwardRef<
           />
         )}
       />
+      ) : null}
 
       {comments ? <CommentsSheet episodeId={comments.id} visible onClose={() => setComments(null)} /> : null}
       {unlock ? (
