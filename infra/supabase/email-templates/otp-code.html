@@ -1,0 +1,56 @@
+<!-- Supabase Auth email template: use for both "Magic link or OTP" and "Confirm sign up".
+     Subject: Your Reel Drama sign-in code -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Your Reel Drama sign-in code</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;">Your sign-in code is {{ .Token }}. It expires soon.</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f4f4f6;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:480px;background-color:#ffffff;border-radius:16px;overflow:hidden;">
+          <tr>
+            <td align="center" style="background-color:#0B0B0F;padding:28px 24px;">
+              <span style="font-size:24px;font-weight:800;letter-spacing:0.5px;color:#ffffff;">Reel</span><span style="font-size:24px;font-weight:800;letter-spacing:0.5px;color:#FF2D55;"> Drama</span>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:36px 32px 8px 32px;">
+              <h1 style="margin:0 0 12px 0;font-size:22px;line-height:30px;font-weight:700;color:#111114;">Your sign-in code</h1>
+              <p style="margin:0;font-size:15px;line-height:24px;color:#4a4a55;">Enter this code in the Reel Drama app to sign in to your account.</p>
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:24px 32px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="center" style="background-color:#fff1f4;border:1px solid #ffd0da;border-radius:12px;padding:18px 28px;">
+                    <span style="font-family:'SFMono-Regular',Menlo,Consolas,'Courier New',monospace;font-size:34px;line-height:40px;font-weight:700;letter-spacing:10px;color:#FF2D55;">{{ .Token }}</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 32px 32px 32px;">
+              <p style="margin:0 0 12px 0;font-size:14px;line-height:22px;color:#4a4a55;">This code expires in a few minutes and can be used only once.</p>
+              <p style="margin:0;font-size:14px;line-height:22px;color:#4a4a55;">Didn't request this? You can safely ignore this email. Someone may have typed your address by mistake. Never share this code with anyone; the Reel Drama team will never ask for it.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="border-top:1px solid #ececf0;padding:20px 32px;">
+              <p style="margin:0;font-size:12px;line-height:18px;color:#8a8a96;">This email was sent to {{ .Email }} because a sign-in was requested for Reel Drama.</p>
+            </td>
+          </tr>
+        </table>
+        <p style="margin:16px 0 0 0;font-size:12px;line-height:18px;color:#8a8a96;">&copy; Reel Drama</p>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
