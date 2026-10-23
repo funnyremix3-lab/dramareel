@@ -208,6 +208,7 @@ model Drama {
   seasons         Season[]
   episodes        Episode[]
   favorites       Favorite[]
+  importJobs      ImportJob[]
 
   @@index([status, publishedAt(sort: Desc)])
   @@index([status, trendingScore(sort: Desc)])
@@ -982,4 +983,52 @@ model AnalyticsEvent {
   @@index([name, occurredAt])
   @@index([occurredAt])
   @@map("analytics_events")
+}
+
+// ──────────────────────── Bulk video import ────────────────────────
+// A long source video is uploaded once, then a local import runner splits it into short episodes
+// at speech pauses, uploads each as a video asset and (optionally) publishes them. The heavy
+// ffmpeg work stays on the operator's machine; this row is the shared job state and progress.
+
+enum ImportJobStatus {
+  PENDING
+  RUNNING
+  READY
+  DONE
+  FAILED
+  CANCELED
+}
+
+model ImportJob {
+  id                  String          @id @default(uuid()) @db.Uuid
+  dramaId             String?         @map("drama_id") @db.Uuid
+  status              ImportJobStatus @default(PENDING)
+  /// imports/{id}/source.<ext> — the uploaded long video, private.
+  sourceKey           String          @map("source_key")
+  sourceSizeBytes     BigInt?         @map("source_size_bytes")
+  title               String          @db.VarChar(160)
+  slug                String          @db.VarChar(120)
+  synopsis            String?
+  primaryLanguageCode String          @default("en") @map("primary_language_code") @db.VarChar(8)
+  categorySlugs       String[]        @map("category_slugs")
+  freeEpisodeCount    Int             @default(10) @map("free_episode_count")
+  defaultUnlockCoins  Int             @default(30) @map("default_unlock_coins")
+  targetSeconds       Int             @default(90) @map("target_seconds")
+  toleranceSeconds    Int             @default(20) @map("tolerance_seconds")
+  autoPublish         Boolean         @default(true) @map("auto_publish")
+  totalEpisodes       Int?            @map("total_episodes")
+  uploadedEpisodes    Int             @default(0) @map("uploaded_episodes")
+  publishedEpisodes   Int             @default(0) @map("published_episodes")
+  step                String?         @db.VarChar(200)
+  lastError           String?         @map("last_error")
+  claimedAt           DateTime?       @map("claimed_at")
+  finishedAt          DateTime?       @map("finished_at")
+  createdBy           String?         @map("created_by") @db.Uuid
+  createdAt           DateTime        @default(now()) @map("created_at")
+  updatedAt           DateTime        @updatedAt @map("updated_at")
+
+  drama Drama? @relation(fields: [dramaId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@map("import_jobs")
 }

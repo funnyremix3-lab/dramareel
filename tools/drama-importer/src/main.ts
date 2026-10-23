@@ -14,7 +14,7 @@
  */
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { AdminApi } from './api';
 import { dedupeRollingCues, parseJson3, parseVtt, quietestMoment, speechPauses, wordsToLines, type Cue } from './captions';
@@ -69,19 +69,33 @@ async function detectSilences(video: string) {
   return parseSilences(stderr);
 }
 
-async function buildPlan(args: Args) {
-  const video = resolve(str(args, 'video'));
+interface PlanParams {
+  target: number;
+  tolerance: number;
+  minLast: number;
+  captionsFile?: string;
+  log?: (msg: string) => void;
+}
+
+/** Plans episode cuts for a video from its silences (and captions, when available). */
+async function planVideo(video: string, p: PlanParams) {
   const duration = await probeDuration(video);
-  const captions = typeof args.captions === 'string' ? parseJson3(await readFile(args.captions, 'utf8')) : [];
-  console.log(`source ${formatTime(duration)}, ${captions.length} caption words; detecting silences…`);
+  const captions = p.captionsFile ? parseJson3(await readFile(p.captionsFile, 'utf8')) : [];
+  p.log?.(`source ${formatTime(duration)}, ${captions.length} caption words; detecting silences…`);
   const silences = await detectSilences(video);
   const boundaries = mergeBoundaries(speechPauses(captions), silences);
-  const segments = planEpisodes(duration, boundaries, {
+  const segments = planEpisodes(duration, boundaries, { target: p.target, tolerance: p.tolerance, minLast: p.minLast });
+  return { video, duration, segments, boundaries: boundaries.length };
+}
+
+async function buildPlan(args: Args) {
+  return planVideo(resolve(str(args, 'video')), {
     target: num(args, 'target', 200),
     tolerance: num(args, 'tolerance', 25),
     minLast: num(args, 'min-last', 60),
+    captionsFile: typeof args.captions === 'string' ? args.captions : undefined,
+    log: (m) => console.log(m),
   });
-  return { video, duration, segments, boundaries: boundaries.length };
 }
 
 function printPlan(segments: Segment[]) {
@@ -285,6 +299,122 @@ async function publish(args: Args) {
   }
 }
 
+/**
+ * Local import runner: claims admin import jobs, splits the uploaded source into episodes, uploads
+ * them and reports progress back. The heavy ffmpeg work stays on this machine. Uploaded sources have
+ * no captions, so cuts come from audio silence.
+ */
+async function worker(args: Args) {
+  const client = await api(args);
+  const root = resolve(str(args, 'work', process.env.IMPORT_WORK_DIR ?? './import-runs'));
+  await mkdir(root, { recursive: true });
+  const pollMs = num(args, 'poll', 15) * 1000;
+  console.log(`import runner ready; work dir ${root}, polling every ${pollMs / 1000}s`);
+  for (;;) {
+    let job;
+    try {
+      job = (await client.listImports('PENDING')).items.sort((a, b) => a.id.localeCompare(b.id))[0];
+    } catch (e) {
+      console.warn(`poll failed: ${(e as Error).message}`);
+      await sleep(pollMs);
+      continue;
+    }
+    if (!job) {
+      if (args.once) return;
+      await sleep(pollMs);
+      continue;
+    }
+    try {
+      const { job: claimed, sourceUrl } = await client.claimImport(job.id);
+      await runJob(client, claimed, sourceUrl, join(root, claimed.id));
+    } catch (e) {
+      const msg = (e as Error).message;
+      console.error(`job ${job.id} failed: ${msg}`);
+      await client.patchImport(job.id, { status: 'FAILED', lastError: msg.slice(0, 1900) }).catch(() => undefined);
+    }
+  }
+}
+
+async function runJob(client: AdminApi, job: import('./api').ImportJob, sourceUrl: string, out: string) {
+  await mkdir(out, { recursive: true });
+  const tag = (n: number) => String(n).padStart(3, '0');
+  const step = (s: string, extra: import('./api').ImportPatch = {}) => client.patchImport(job.id, { step: s, ...extra }).catch(() => undefined);
+  console.log(`\n▶ ${job.slug} (${job.id})`);
+
+  const source = join(out, 'source.mp4');
+  if (!existsSync(source)) {
+    await step('Downloading source');
+    await client.download(sourceUrl, source + '.part');
+    await rename(source + '.part', source);
+  }
+
+  await step('Planning episodes');
+  const { segments } = await planVideo(source, { target: job.targetSeconds, tolerance: job.toleranceSeconds, minLast: Math.min(30, job.targetSeconds / 3), log: (m) => console.log(m) });
+  console.log(`${segments.length} episodes`);
+  await step('Creating drama', { totalEpisodes: segments.length });
+
+  const drama = await client.createDrama({
+    slug: job.slug,
+    title: job.title,
+    primaryLanguageCode: job.primaryLanguageCode,
+    ...(job.synopsis ? { synopsis: job.synopsis } : {}),
+    ...(job.categorySlugs.length ? { categorySlugs: job.categorySlugs } : {}),
+    orientation: 'PORTRAIT',
+    freeEpisodeCount: job.freeEpisodeCount,
+    defaultUnlockCoins: job.defaultUnlockCoins,
+  });
+  await client.patchImport(job.id, { dramaId: drama.id });
+
+  const poster = join(out, 'poster.jpg');
+  // No captions for uploaded sources, so take a frame partway into the first episode.
+  const posterAt = Math.min(30, segments[0].end / 2);
+  await exec(FFMPEG, ['-hide_banner', '-loglevel', 'error', '-y', '-ss', String(posterAt), '-i', source, '-frames:v', '1', '-vf', 'scale=720:-2', '-q:v', '3', poster]);
+  const posterKey = await client.uploadPoster(drama.id, poster);
+  await client.updateDrama(drama.id, { posterKey, coverKey: posterKey });
+
+  const assets: { episodeId: string; assetId: string }[] = [];
+  for (const seg of segments) {
+    const clip = join(out, `ep${tag(seg.number)}.mp4`);
+    await cutClip(source, seg, clip);
+    const ep = await client.createEpisode(drama.id, { number: seg.number, title: `Episode ${seg.number}` });
+    const assetId = await client.uploadVideo(ep.id, clip);
+    assets.push({ episodeId: ep.id, assetId });
+    await rm(clip, { force: true });
+    await step(`Uploaded ${seg.number}/${segments.length}`, { uploadedEpisodes: seg.number });
+    console.log(`EP${tag(seg.number)} uploaded`);
+  }
+
+  if (!job.autoPublish) {
+    await client.patchImport(job.id, { status: 'READY', step: 'Uploaded; transcoding' });
+    console.log('uploaded; auto-publish off, leaving episodes for manual publish');
+    return;
+  }
+
+  await step('Transcoding & publishing');
+  let published = 0;
+  let dramaPublished = false;
+  while (published < assets.length) {
+    const asset = await client.videoAsset(assets[published].assetId);
+    if (asset.status === 'FAILED') throw new Error(`EP${published + 1} transcode failed: ${asset.lastError ?? ''}`);
+    if (asset.status !== 'READY') {
+      await sleep(10_000);
+      continue;
+    }
+    await client.publishEpisode(assets[published].episodeId);
+    if (!dramaPublished) {
+      await client.publishDrama(drama.id);
+      dramaPublished = true;
+    }
+    published++;
+    await client.patchImport(job.id, { publishedEpisodes: published, step: `Published ${published}/${assets.length}` });
+  }
+  await client.patchImport(job.id, { status: 'DONE', step: 'Done' });
+  await rm(source, { force: true });
+  console.log(`✔ ${job.slug}: ${published} episodes published`);
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 async function main() {
   const { command, args } = parseArgs(process.argv.slice(2));
   if (command === 'plan') {
@@ -297,7 +427,8 @@ async function main() {
   } else if (command === 'import') await importDrama(args);
   else if (command === 'publish') await publish(args);
   else if (command === 'poster') await replacePoster(args);
-  else console.log('usage: npm run import -- <plan|import|publish> --video … --captions … --out …  (see src/main.ts)');
+  else if (command === 'worker') await worker(args);
+  else console.log('usage: npm run import -- <plan|import|publish|poster|worker> … (see src/main.ts)');
 }
 
 main().catch((err) => {

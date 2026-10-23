@@ -44,7 +44,7 @@ describe("nav gating", () => {
   });
   it("shows content pages to a content manager, but not users, roles, ads or audit", () => {
     const l = labels(["CONTENT_MANAGER"]);
-    expect(l).toEqual(["Overview", "Dramas", "Video processing", "Categories & languages", "Moderation", "Products", "Notifications", "Reports"]);
+    expect(l).toEqual(["Overview", "Dramas", "Video processing", "Import videos", "Categories & languages", "Moderation", "Products", "Notifications", "Reports"]);
   });
   it("shows ads and analytics to an ads manager", () => {
     expect(labels(["ADS_MANAGER"])).toEqual(["Overview", "Ads", "Reports"]);

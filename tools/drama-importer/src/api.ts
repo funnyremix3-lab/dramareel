@@ -1,8 +1,38 @@
+import { createWriteStream } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 
 interface Presigned {
   uploadUrl: string;
   headers: Record<string, string>;
+}
+
+export interface ImportJob {
+  id: string;
+  status: 'PENDING' | 'RUNNING' | 'READY' | 'DONE' | 'FAILED' | 'CANCELED';
+  dramaId: string | null;
+  sourceKey: string;
+  title: string;
+  slug: string;
+  synopsis: string | null;
+  primaryLanguageCode: string;
+  categorySlugs: string[];
+  freeEpisodeCount: number;
+  defaultUnlockCoins: number;
+  targetSeconds: number;
+  toleranceSeconds: number;
+  autoPublish: boolean;
+}
+
+export interface ImportPatch {
+  status?: 'RUNNING' | 'READY' | 'DONE' | 'FAILED';
+  dramaId?: string;
+  totalEpisodes?: number;
+  uploadedEpisodes?: number;
+  publishedEpisodes?: number;
+  step?: string;
+  lastError?: string;
 }
 
 /** Thin client for the Admin API. Every write goes through the same permission and audit checks as the admin panel. */
@@ -86,5 +116,25 @@ export class AdminApi {
 
   publishDrama(id: string) {
     return this.request('POST', `/admin/dramas/${id}/publish`);
+  }
+
+  // Bulk import jobs
+  listImports(status: ImportJob['status']) {
+    return this.request<{ items: ImportJob[] }>('GET', `/admin/imports?status=${status}`);
+  }
+
+  claimImport(id: string) {
+    return this.request<{ job: ImportJob; sourceUrl: string }>('POST', `/admin/imports/${id}/claim`);
+  }
+
+  patchImport(id: string, patch: ImportPatch) {
+    return this.request<ImportJob>('PATCH', `/admin/imports/${id}`, patch);
+  }
+
+  /** Streams a (presigned) URL to a local file. */
+  async download(url: string, dest: string): Promise<void> {
+    const res = await fetch(url);
+    if (!res.ok || !res.body) throw new Error(`download → HTTP ${res.status}`);
+    await pipeline(Readable.fromWeb(res.body as Parameters<typeof Readable.fromWeb>[0]), createWriteStream(dest));
   }
 }

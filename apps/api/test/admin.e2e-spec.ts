@@ -39,6 +39,7 @@ describe('Admin API (e2e)', () => {
       { route: ['get', '/api/v1/admin/products'], allowed: ['owner', 'content'] },
       { route: ['get', '/api/v1/admin/notifications'], allowed: ['owner', 'content'] },
       { route: ['get', '/api/v1/admin/video-assets'], allowed: ['owner', 'content'] },
+      { route: ['get', '/api/v1/admin/imports'], allowed: ['owner', 'content'] },
     ];
 
     it.each(matrix)('$route.1 is allowed only for $allowed', async ({ route: [method, path], allowed }) => {
@@ -50,6 +51,40 @@ describe('Admin API (e2e)', () => {
 
     it('anonymous requests get 401', async () => {
       await http.get('/api/v1/admin/dramas').expect(401);
+    });
+  });
+
+  describe('bulk import jobs', () => {
+    it('upload url → create → claim → progress → done', async () => {
+      const up = await http.post('/api/v1/admin/imports/source-upload-url').set(as('content')).send({ contentType: 'video/mp4', sizeBytes: 1024 }).expect(201);
+      expect(up.body.sourceKey).toMatch(/^imports\/[0-9a-f-]+\/source\.mp4$/);
+      expect(up.body.uploadUrl).toContain('http');
+
+      const slug = `e2e-import-${stamp}`;
+      const created = await http
+        .post('/api/v1/admin/imports')
+        .set(as('content'))
+        .send({ sourceKey: up.body.sourceKey, title: 'Imported Drama', slug, categorySlugs: ['romance'], targetSeconds: 90, autoPublish: true })
+        .expect(201);
+      expect(created.body).toMatchObject({ status: 'PENDING', slug, targetSeconds: 90, uploadedEpisodes: 0 });
+
+      await http.post('/api/v1/admin/imports').set(as('content')).send({ sourceKey: up.body.sourceKey, title: 'dup', slug }).expect(400);
+      expect((await http.get('/api/v1/admin/imports').set(as('content')).expect(200)).body.items.some((j: { id: string }) => j.id === created.body.id)).toBe(true);
+
+      const claim = await http.post(`/api/v1/admin/imports/${created.body.id}/claim`).set(as('owner')).expect(201);
+      expect(claim.body.job.status).toBe('RUNNING');
+      expect(claim.body.sourceUrl).toContain('http');
+      await http.post(`/api/v1/admin/imports/${created.body.id}/claim`).set(as('owner')).expect(400); // already claimed
+
+      await http.patch(`/api/v1/admin/imports/${created.body.id}`).set(as('owner')).send({ totalEpisodes: 12, uploadedEpisodes: 3, step: 'Cutting' }).expect(200);
+      const done = await http.patch(`/api/v1/admin/imports/${created.body.id}`).set(as('owner')).send({ status: 'DONE', publishedEpisodes: 12 }).expect(200);
+      expect(done.body).toMatchObject({ status: 'DONE', totalEpisodes: 12, publishedEpisodes: 12 });
+      expect(done.body.finishedAt).not.toBeNull();
+    });
+
+    it('rejects an invalid sourceKey and a too-large file', async () => {
+      await http.post('/api/v1/admin/imports').set(as('content')).send({ sourceKey: 'evil/key', title: 'x', slug: `bad-${stamp}` }).expect(400);
+      await http.post('/api/v1/admin/imports/source-upload-url').set(as('content')).send({ contentType: 'video/mp4', sizeBytes: 9 * 1024 * 1024 * 1024 }).expect(400);
     });
   });
 

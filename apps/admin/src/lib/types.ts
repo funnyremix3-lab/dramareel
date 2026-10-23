@@ -143,6 +143,34 @@ export interface Language {
   enabled: boolean;
 }
 
+export type ImportJobStatus = "PENDING" | "RUNNING" | "READY" | "DONE" | "FAILED" | "CANCELED";
+
+export interface ImportJob {
+  id: string;
+  dramaId: string | null;
+  status: ImportJobStatus;
+  sourceKey: string;
+  sourceSizeBytes: number | null;
+  title: string;
+  slug: string;
+  synopsis: string | null;
+  primaryLanguageCode: string;
+  categorySlugs: string[];
+  freeEpisodeCount: number;
+  defaultUnlockCoins: number;
+  targetSeconds: number;
+  toleranceSeconds: number;
+  autoPublish: boolean;
+  totalEpisodes: number | null;
+  uploadedEpisodes: number;
+  publishedEpisodes: number;
+  step: string | null;
+  lastError: string | null;
+  createdAt: string;
+  updatedAt: string;
+  finishedAt: string | null;
+}
+
 export type UserStatus = "ACTIVE" | "SUSPENDED" | "DELETED";
 
 export interface UserListItem {

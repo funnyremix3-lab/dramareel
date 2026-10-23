@@ -19,6 +19,7 @@ import { DevModule } from './dev/dev.module';
 import { EngagementModule } from './engagement/engagement.module';
 import { EntitlementsModule } from './entitlements/entitlements.service';
 import { HealthModule } from './health/health.controller';
+import { ImportsModule } from './imports/imports.module';
 import { MediaModule } from './media/media.module';
 import { PaymentsModule } from './payments/payments.controller';
 import { QueueModule } from './queue/transcode-queue.service';
@@ -62,6 +63,7 @@ const env = loadEnv();
     AdsModule,
     PaymentsModule,
     AdminModule,
+    ImportsModule,
     AnalyticsModule,
     DevModule.register(),
     HealthModule,

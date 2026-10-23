@@ -87,6 +87,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { href: "/overview", label: "Overview", permission: "analytics:read" },
   { href: "/dramas", label: "Dramas", permission: "dramas:read" },
   { href: "/video-assets", label: "Video processing", permission: "media:write" },
+  { href: "/imports", label: "Import videos", permission: "media:write" },
   { href: "/taxonomy", label: "Categories & languages", permission: "dramas:read" },
   { href: "/users", label: "Users", permission: "users:read" },
   { href: "/roles", label: "Roles", permission: "roles:write" },
