@@ -57,7 +57,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        dir: [workers/video-transcoder, workers/notifications]
+        dir: [workers/video-transcoder, workers/notifications, tools/drama-importer]
     defaults:
       run:
         working-directory: ${{ matrix.dir }}

@@ -32,3 +32,6 @@ Thumbs.db
 
 # Locally built APKs (never commit binaries)
 /builds/
+
+# Licensed source videos and their working files (never committed)
+media/
